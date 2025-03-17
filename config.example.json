@@ -1,0 +1,18 @@
+{
+    "download_dir": "~/Downloads/youtube",
+    "default_proxy": null,
+    "captcha_api_key": null,
+    "aria2": {
+        "path": "aria2c",
+        "max_connections": 4,
+        "split": 4,
+        "enabled": true
+    },
+    "ytdlp": {
+        "format": "bestvideo+bestaudio/best",
+        "preferred_codec": "mp4"
+    },
+    "batch": {
+        "max_concurrent": 3
+    }
+}

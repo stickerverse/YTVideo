@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VideoGrab - Free YouTube Video Downloader</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="logo.svg" alt="VideoGrab Logo">
+                    <span>VideoGrab</span>
+                </div>
+                <nav>
+                    <ul class="main-nav">
+                        <li><a href="#" class="active">Home</a></li>
+                        <li class="dropdown">
+                            <a href="#">Tools <i class="fas fa-chevron-down"></i></a>
+                            <div class="dropdown-content">
+                                <a href="#">YouTube Downloader</a>
+                                <a href="#">MP3 Converter</a>
+                                <a href="#">Video Trimmer</a>
+                                <a href="#">Audio Extractor</a>
+                            </div>
+                        </li>
+                        <li><a href="#">Pricing</a></li>
+                        <li><a href="#">Blog</a></li>
+                    </ul>
+                </nav>
+                <div class="auth-buttons">
+                    <a href="#" class="login-btn"><i class="fas fa-sign-in-alt"></i> Log In</a>
+                    <a href="#" class="free-trial-btn">Start FREE Trial</a>
+                    <div class="language-selector">
+                        <i class="fas fa-globe"></i>
+                    </div>
+                </div>
+                <button class="mobile-menu-btn">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h1>Free YouTube Video Downloader</h1>
+                <p class="hero-description">
+                    The Ultimate YouTube Video Downloader! Paste a YouTube URL to start downloading now—fast,
+                    no ads, and unlimited.
+                </p>
+
+                <div class="download-box">
+                    <div class="url-input-container">
+                        <i class="fas fa-link"></i>
+                        <input type="text" id="video-url" placeholder="https://www.youtube.com/watch?v=">
+                    </div>
+                    <button id="download-btn" class="download-btn">Download</button>
+                </div>
+
+                <p class="disclaimer">
+                    Please ensure that the files you download do not violate the rights of others. Copyrighted music cannot be downloaded using this tool.
+                </p>
+
+                <div class="secondary-action">
+                    <a href="#" class="transcribe-btn">
+                        Transcribe YouTube Video Now <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="download-options hidden" id="download-options">
+            <div class="container">
+                <div class="video-info">
+                    <div class="video-thumbnail">
+                        <img id="video-thumbnail" src="" alt="Video thumbnail">
+                        <span class="video-duration" id="video-duration"></span>
+                    </div>
+                    <div class="video-details">
+                        <h3 id="video-title"></h3>
+                        <p id="video-channel"></p>
+                    </div>
+                </div>
+                
+                <div class="format-options">
+                    <h4>Select Download Format</h4>
+                    <div class="format-grid" id="format-grid">
+                        <!-- Format options will be inserted here -->
+                    </div>
+                </div>
+                
+                <div class="download-progress hidden" id="download-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-info">
+                        <span id="progress-text">Preparing download...</span>
+                        <span id="progress-percentage">0%</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="tools">
+            <div class="container">
+                <h2>More Tools</h2>
+                <div class="tools-grid">
+                    <div class="tool-card">
+                        <div class="tool-icon youtube-icon">
+                            <i class="fab fa-youtube"></i>
+                        </div>
+                        <h3>YouTube to MP4 Converter</h3>
+                        <p>Easily convert YouTube videos to MP4 format for offline viewing on any device. Free and high-quality downloads.</p>
+                    </div>
+                    
+                    <div class="tool-card">
+                        <div class="tool-icon transcription-icon">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <h3>AI Transcription Tool</h3>
+                        <p>Effortlessly transcribe YouTube videos with our AI, providing fast and accurate results.</p>
+                    </div>
+                    
+                    <div class="tool-card">
+                        <div class="tool-icon tiktok-icon">
+                            <i class="fab fa-tiktok"></i>
+                        </div>
+                        <h3>TikTok Video Transcription</h3>
+                        <p>Transcribe TikTok videos quickly and accurately with our easy-to-use tool.</p>
+                    </div>
+                    
+                    <div class="tool-card">
+                        <div class="tool-icon transcript-icon">
+                            <i class="fas fa-closed-captioning"></i>
+                        </div>
+                        <h3>Video Transcript Generator</h3>
+                        <p>Generate accurate video transcripts quickly with our free AI-powered tool.</p>
+                    </div>
+                    
+                    <div class="tool-card">
+                        <div class="tool-icon instagram-icon">
+                            <i class="fab fa-instagram"></i>
+                        </div>
+                        <h3>Instagram Video Transcript</h3>
+                        <p>Seamlessly transcribe Instagram videos, Reels, and Stories into text with ease and accuracy.</p>
+                    </div>
+                    
+                    <div class="tool-card">
+                        <div class="tool-icon translate-icon">
+                            <i class="fas fa-language"></i>
+                        </div>
+                        <h3>Translate Audio to Text</h3>
+                        <p>Quickly translate audio to text with high accuracy using our easy-to-use tool.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <img src="logo.svg" alt="VideoGrab Logo">
+                    <span>VideoGrab</span>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Products</h4>
+                        <ul>
+                            <li><a href="#">YouTube Downloader</a></li>
+                            <li><a href="#">MP4 Converter</a></li>
+                            <li><a href="#">Transcription Tool</a></li>
+                            <li><a href="#">Audio Extractor</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Company</h4>
+                        <ul>
+                            <li><a href="#">About Us</a></li>
+                            <li><a href="#">Blog</a></li>
+                            <li><a href="#">Careers</a></li>
+                            <li><a href="#">Contact</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Legal</h4>
+                        <ul>
+                            <li><a href="#">Terms of Service</a></li>
+                            <li><a href="#">Privacy Policy</a></li>
+                            <li><a href="#">DMCA</a></li>
+                            <li><a href="#">Cookie Policy</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 VideoGrab. All rights reserved.</p>
+                <div class="social-icons">
+                    <a href="#"><i class="fab fa-twitter"></i></a>
+                    <a href="#"><i class="fab fa-facebook"></i></a>
+                    <a href="#"><i class="fab fa-instagram"></i></a>
+                    <a href="#"><i class="fab fa-youtube"></i></a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
