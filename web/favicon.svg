@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3a86ff" />
+      <stop offset="100%" stop-color="#ff006e" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="8" width="24" height="16" rx="3" fill="url(#logoGradient)" />
+  <polygon points="13,12 13,20 21,16" fill="white" />
+  <text x="22" y="19" font-family="Arial" font-size="7" font-weight="bold" fill="white">4K</text>
+</svg>

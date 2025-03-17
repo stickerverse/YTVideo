@@ -1,6 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
-  <rect x="5" y="10" width="30" height="20" rx="3" fill="#4361ee" />
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3a86ff" />
+      <stop offset="100%" stop-color="#ff006e" />
+    </linearGradient>
+  </defs>
+  <rect x="5" y="10" width="30" height="20" rx="3" fill="url(#logoGradient)" />
   <polygon points="16,15 16,25 26,20" fill="white" />
+  <text x="30" y="25" font-family="Arial" font-size="10" font-weight="bold" fill="white">4K</text>
   <path d="M33,17 L36,17 A2,2 0 0 1 38,19 L38,21 A2,2 0 0 1 36,23 L33,23" stroke="white" stroke-width="2" fill="none" />
   <path d="M2,17 L5,17 L5,23 L2,23" stroke="white" stroke-width="2" fill="none" />
 </svg>

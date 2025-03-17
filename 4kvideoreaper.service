@@ -1,0 +1,13 @@
+[Unit]
+Description=4K Video Reaper Web Service
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/4KVideoReaper/web
+Environment="PATH=/var/www/4KVideoReaper/venv/bin"
+ExecStart=/var/www/4KVideoReaper/venv/bin/gunicorn --workers 3 --bind unix:4kvideoreaper.sock -m 007 wsgi:app
+
+[Install]
+WantedBy=multi-user.target

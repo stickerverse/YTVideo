@@ -1,103 +1,174 @@
-# YouTube Downloader - Deployment Guide
+# Deploying 4K Video Reaper
 
-This guide will walk you through deploying the YouTube Downloader web application to Firebase.
+This guide will help you deploy the 4K Video Reaper application to a web server so it's accessible at your domain (4kvideoreaper.com).
 
 ## Prerequisites
 
-1. Firebase account (free tier is sufficient)
-2. Node.js installed on your development machine
-3. Firebase CLI installed (`npm install -g firebase-tools`)
+- A web server with Ubuntu/Debian (recommended)
+- Python 3.7+ installed
+- Nginx web server
+- Domain name configured to point to your server
 
-## Step 1: Set up Firebase Project
+## Deployment Steps
 
-1. Go to the [Firebase Console](https://console.firebase.google.com/)
-2. Click "Add project" and follow the steps to create a new project
-3. Give your project a name (e.g., "YouTube Downloader")
-4. Configure Google Analytics (optional)
-5. Click "Create Project"
+### 1. Prepare the Server
 
-## Step 2: Initialize Firebase in your local project
-
-1. Open a terminal in the `web` directory of this project
-2. Login to Firebase:
-   ```bash
-   firebase login
-   ```
-3. Initialize the project:
-   ```bash
-   firebase init
-   ```
-   - Select "Hosting" and "Functions" features
-   - Select the Firebase project you created in Step 1
-   - Use "public" as the public directory
-   - Configure as a single-page app: No
-   - Use the existing firebase.json (Yes)
-   - Install dependencies: Yes
-
-## Step 3: Update Firebase Project Name in Configuration
-
-1. Open the `.firebaserc` file in the `web` directory
-2. Update the "default" project name to match your Firebase project ID:
-   ```json
-   {
-     "projects": {
-       "default": "YOUR-FIREBASE-PROJECT-ID"
-     }
-   }
-   ```
-
-## Step 4: Deploy to Firebase
-
-Deploy the application and functions:
 ```bash
-firebase deploy
+# Update the system
+sudo apt update
+sudo apt upgrade -y
+
+# Install required packages
+sudo apt install -y python3-pip python3-venv nginx aria2
 ```
 
-This will deploy both the web application and the Firebase Functions that handle the backend logic.
+### 2. Set Up the Application Directory
 
-## Step 5: Configure Firebase Services
+```bash
+# Create application directory
+sudo mkdir -p /var/www/4KVideoReaper
+sudo chown -R $USER:$USER /var/www/4KVideoReaper
 
-After deployment, you'll need to enable and configure some Firebase services:
+# Clone the repository (replace with your actual repository)
+git clone https://github.com/stickerverse/4KVideoReaper.git /var/www/4KVideoReaper
 
-1. **Firebase Storage**: Go to the Firebase Console > Storage, and click "Get Started" to initialize Cloud Storage. Choose a location for your data.
-
-2. **Firestore Database**: Go to the Firebase Console > Firestore Database, and click "Create Database". Start in test mode (you can adjust security rules later).
-
-3. **Upgrade Plan (Important)**: The free "Spark" plan has limitations that may affect video downloads. Consider upgrading to the "Blaze" pay-as-you-go plan for better performance and to allow external network requests.
-
-## Step 6: Configure Billing Alerts (If using Blaze plan)
-
-If you upgraded to the Blaze plan, it's a good idea to set up billing alerts:
-
-1. Go to Firebase Console > Project Settings > Usage and Billing
-2. Click "Manage Budget Alerts"
-3. Set up alerts to notify you if costs exceed your expectations
-
-## Step 7: Test Your Deployment
-
-Visit your deployed application at:
-```
-https://YOUR-FIREBASE-PROJECT-ID.web.app
+# Navigate to the application directory
+cd /var/www/4KVideoReaper
 ```
 
-Verify that:
-- The UI loads correctly
-- You can enter YouTube URLs
-- Video info is retrieved
-- Downloads can be initiated and completed
+### 3. Create a Virtual Environment
+
+```bash
+# Create a virtual environment
+python3 -m venv venv
+
+# Activate the virtual environment
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+pip install -r web/requirements.txt
+pip install -e .
+```
+
+### 4. Configure the Web Server
+
+```bash
+# Create Nginx site configuration
+sudo cp 4kvideoreaper.conf /etc/nginx/sites-available/
+
+# Create a symlink to enable the site
+sudo ln -s /etc/nginx/sites-available/4kvideoreaper.conf /etc/nginx/sites-enabled/
+
+# Test Nginx configuration
+sudo nginx -t
+
+# Restart Nginx
+sudo systemctl restart nginx
+```
+
+### 5. Set Up the Application Service
+
+```bash
+# Copy the service file
+sudo cp 4kvideoreaper.service /etc/systemd/system/
+
+# Reload systemd to recognize the new service
+sudo systemctl daemon-reload
+
+# Enable the service to start on boot
+sudo systemctl enable 4kvideoreaper
+
+# Start the service
+sudo systemctl start 4kvideoreaper
+
+# Check status
+sudo systemctl status 4kvideoreaper
+```
+
+### 6. Set Up HTTPS with Let's Encrypt (Optional but Recommended)
+
+```bash
+# Install Certbot
+sudo apt install -y certbot python3-certbot-nginx
+
+# Obtain SSL certificate
+sudo certbot --nginx -d 4kvideoreaper.com -d www.4kvideoreaper.com
+
+# Follow the prompts to complete the setup
+```
+
+### 7. Verify the Deployment
+
+1. Open your web browser and navigate to your domain (e.g., https://4kvideoreaper.com)
+2. Test downloading a YouTube video to ensure everything is working correctly
 
 ## Troubleshooting
 
-If you encounter issues:
+### Check Logs
 
-1. **Functions not deploying**: Check if there are any errors in the Firebase console > Functions logs.
+If you encounter issues, check the logs:
 
-2. **CORS issues**: If you see CORS errors, check your Firebase project settings and ensure your domain is properly configured.
+```bash
+# View Nginx error logs
+sudo tail -f /var/log/nginx/error.log
 
-3. **Download failures**: Check the Functions logs for more detailed error messages.
+# View application logs
+sudo journalctl -u 4kvideoreaper.service -f
+```
 
-4. **Storage limitations**: If files aren't being uploaded to Storage, check your Storage rules and ensure the Functions have proper permissions.
+### Common Issues
 
-## Legal Consideration
+1. **Permission Issues**: Make sure the web service has permission to access the download directory
+   ```bash
+   sudo chown -R www-data:www-data /var/www/4KVideoReaper/web/public
+   ```
 
-Remember that this application is for educational purposes only. Using it to download copyrighted content may violate YouTube's Terms of Service and copyright laws in your jurisdiction. Always respect copyright and use this tool responsibly.
+2. **Socket Connection Error**: Check if the socket file exists and has correct permissions
+   ```bash
+   sudo chown www-data:www-data /var/www/4KVideoReaper/web/4kvideoreaper.sock
+   ```
+
+3. **API Not Responding**: Check if the Flask application is running
+   ```bash
+   sudo systemctl restart 4kvideoreaper
+   ```
+
+## Updating the Application
+
+To update the application with new changes:
+
+```bash
+# Navigate to the application directory
+cd /var/www/4KVideoReaper
+
+# Pull the latest changes
+git pull
+
+# Activate the virtual environment
+source venv/bin/activate
+
+# Install any new dependencies
+pip install -r requirements.txt
+pip install -r web/requirements.txt
+
+# Restart the service
+sudo systemctl restart 4kvideoreaper
+```
+
+## Production Optimization
+
+For better performance in production:
+
+1. **Increase Worker Count**: Edit the service file to increase Gunicorn workers (usually 2 * CPU cores + 1)
+2. **Set Up Caching**: Configure Nginx caching for static assets
+3. **Implement Rate Limiting**: Add rate limiting to prevent abuse
+
+## Docker Deployment (Alternative)
+
+If you prefer using Docker, you can containerize the application:
+
+1. Create a `Dockerfile` in the project root
+2. Build and deploy with Docker Compose
+
+This approach simplifies deployment across different environments.

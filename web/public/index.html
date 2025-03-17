@@ -3,18 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VideoGrab - Free YouTube Video Downloader</title>
+    <title>4K Video Reaper - Advanced YouTube Downloader</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
 </head>
 <body>
     <header>
         <div class="container">
             <div class="header-content">
                 <div class="logo">
-                    <img src="logo.svg" alt="VideoGrab Logo">
-                    <span>VideoGrab</span>
+                    <img src="logo.svg" alt="4K Video Reaper Logo">
+                    <span>4K Video Reaper</span>
                 </div>
                 <nav>
                     <ul class="main-nav">
@@ -23,21 +24,17 @@
                             <a href="#">Tools <i class="fas fa-chevron-down"></i></a>
                             <div class="dropdown-content">
                                 <a href="#">YouTube Downloader</a>
-                                <a href="#">MP3 Converter</a>
-                                <a href="#">Video Trimmer</a>
+                                <a href="#">Batch Download</a>
                                 <a href="#">Audio Extractor</a>
+                                <a href="#">Proxy Settings</a>
                             </div>
                         </li>
-                        <li><a href="#">Pricing</a></li>
-                        <li><a href="#">Blog</a></li>
+                        <li><a href="#about">About</a></li>
+                        <li><a href="#faq">FAQ</a></li>
                     </ul>
                 </nav>
                 <div class="auth-buttons">
-                    <a href="#" class="login-btn"><i class="fas fa-sign-in-alt"></i> Log In</a>
-                    <a href="#" class="free-trial-btn">Start FREE Trial</a>
-                    <div class="language-selector">
-                        <i class="fas fa-globe"></i>
-                    </div>
+                    <a href="#" class="github-btn"><i class="fab fa-github"></i> GitHub</a>
                 </div>
                 <button class="mobile-menu-btn">
                     <span></span>
@@ -53,27 +50,35 @@
             <div class="container">
                 <h1>Free YouTube Video Downloader</h1>
                 <p class="hero-description">
-                    The Ultimate YouTube Video Downloader! Paste a YouTube URL to start downloading now—fast,
-                    no ads, and unlimited.
+                    Download YouTube videos in 4K quality. Fast, reliable, and with advanced features like proxy support, CAPTCHA solving, and batch downloading.
                 </p>
 
                 <div class="download-box">
                     <div class="url-input-container">
                         <i class="fas fa-link"></i>
-                        <input type="text" id="video-url" placeholder="https://www.youtube.com/watch?v=">
+                        <input type="text" id="video-url" placeholder="Paste YouTube URL here...">
                     </div>
                     <button id="download-btn" class="download-btn">Download</button>
                 </div>
 
-                <p class="disclaimer">
-                    Please ensure that the files you download do not violate the rights of others. Copyrighted music cannot be downloaded using this tool.
-                </p>
-
-                <div class="secondary-action">
-                    <a href="#" class="transcribe-btn">
-                        Transcribe YouTube Video Now <i class="fas fa-arrow-right"></i>
-                    </a>
+                <div class="advanced-options">
+                    <div class="option">
+                        <input type="checkbox" id="use-aria2" checked>
+                        <label for="use-aria2">Use Aria2 (faster downloads)</label>
+                    </div>
+                    <div class="option">
+                        <input type="checkbox" id="use-proxy">
+                        <label for="use-proxy">Use Proxy</label>
+                    </div>
+                    <div class="option">
+                        <input type="checkbox" id="download-subtitles">
+                        <label for="download-subtitles">Download Subtitles</label>
+                    </div>
                 </div>
+
+                <p class="disclaimer">
+                    Please ensure that the files you download do not violate copyright laws. This tool is for personal use only.
+                </p>
             </div>
         </section>
 
@@ -87,6 +92,7 @@
                     <div class="video-details">
                         <h3 id="video-title"></h3>
                         <p id="video-channel"></p>
+                        <p id="video-views"></p>
                     </div>
                 </div>
                 
@@ -105,60 +111,193 @@
                         <span id="progress-text">Preparing download...</span>
                         <span id="progress-percentage">0%</span>
                     </div>
+                    <div class="progress-details">
+                        <span id="download-speed">0 MB/s</span>
+                        <span id="download-eta">--:--</span>
+                    </div>
+                    <div class="download-actions">
+                        <button id="cancel-btn" class="cancel-btn">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <section class="tools">
+        <section class="batch-download" id="batch-download">
             <div class="container">
-                <h2>More Tools</h2>
-                <div class="tools-grid">
-                    <div class="tool-card">
-                        <div class="tool-icon youtube-icon">
-                            <i class="fab fa-youtube"></i>
+                <h2>Batch Download</h2>
+                <p>Download multiple videos at once. Enter one URL per line.</p>
+                
+                <div class="batch-input-container">
+                    <textarea id="batch-urls" placeholder="https://www.youtube.com/watch?v=VIDEO_ID1&#10;https://www.youtube.com/watch?v=VIDEO_ID2&#10;..."></textarea>
+                    <div class="batch-options">
+                        <div class="option">
+                            <label for="batch-format">Format:</label>
+                            <select id="batch-format">
+                                <option value="best">Best Quality</option>
+                                <option value="1080p">1080p</option>
+                                <option value="720p">720p</option>
+                                <option value="480p">480p</option>
+                                <option value="mp3">MP3 (Audio Only)</option>
+                            </select>
                         </div>
-                        <h3>YouTube to MP4 Converter</h3>
-                        <p>Easily convert YouTube videos to MP4 format for offline viewing on any device. Free and high-quality downloads.</p>
+                        <div class="option">
+                            <label for="batch-concurrent">Max Concurrent:</label>
+                            <select id="batch-concurrent">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3" selected>3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="batch-btn" class="batch-btn">Start Batch Download</button>
+                </div>
+                
+                <div class="batch-downloads" id="batch-downloads">
+                    <!-- Batch downloads will be shown here -->
+                </div>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="container">
+                <h2>Advanced Features</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-tachometer-alt"></i>
+                        </div>
+                        <h3>Multi-threaded Downloads</h3>
+                        <p>Using Aria2 for faster parallel downloading with multiple connections.</p>
                     </div>
                     
-                    <div class="tool-card">
-                        <div class="tool-icon transcription-icon">
-                            <i class="fas fa-file-alt"></i>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-shield-alt"></i>
                         </div>
-                        <h3>AI Transcription Tool</h3>
-                        <p>Effortlessly transcribe YouTube videos with our AI, providing fast and accurate results.</p>
+                        <h3>Proxy Support</h3>
+                        <p>Route your downloads through proxies for anonymity and to bypass restrictions.</p>
                     </div>
                     
-                    <div class="tool-card">
-                        <div class="tool-icon tiktok-icon">
-                            <i class="fab fa-tiktok"></i>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-puzzle-piece"></i>
                         </div>
-                        <h3>TikTok Video Transcription</h3>
-                        <p>Transcribe TikTok videos quickly and accurately with our easy-to-use tool.</p>
+                        <h3>CAPTCHA Solving</h3>
+                        <p>Automatically handle CAPTCHAs that may appear during the download process.</p>
                     </div>
                     
-                    <div class="tool-card">
-                        <div class="tool-icon transcript-icon">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-layer-group"></i>
+                        </div>
+                        <h3>Batch Downloads</h3>
+                        <p>Download multiple videos simultaneously with configurable concurrency.</p>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-file-audio"></i>
+                        </div>
+                        <h3>Audio Extraction</h3>
+                        <p>Extract audio from videos in high-quality MP3 format.</p>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-icon">
                             <i class="fas fa-closed-captioning"></i>
                         </div>
-                        <h3>Video Transcript Generator</h3>
-                        <p>Generate accurate video transcripts quickly with our free AI-powered tool.</p>
+                        <h3>Subtitle Download</h3>
+                        <p>Download video subtitles in multiple languages when available.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="faq" id="faq">
+            <div class="container">
+                <h2>Frequently Asked Questions</h2>
+                <div class="faq-items">
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>Is this tool free to use?</h3>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Yes, 4K Video Reaper is completely free and open source. There are no hidden fees or premium features.</p>
+                        </div>
                     </div>
                     
-                    <div class="tool-card">
-                        <div class="tool-icon instagram-icon">
-                            <i class="fab fa-instagram"></i>
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>Is it legal to download YouTube videos?</h3>
+                            <i class="fas fa-chevron-down"></i>
                         </div>
-                        <h3>Instagram Video Transcript</h3>
-                        <p>Seamlessly transcribe Instagram videos, Reels, and Stories into text with ease and accuracy.</p>
+                        <div class="faq-answer">
+                            <p>Downloading videos for personal use is generally acceptable, but redistributing copyrighted content is illegal. Always respect copyright laws and YouTube's terms of service.</p>
+                        </div>
                     </div>
                     
-                    <div class="tool-card">
-                        <div class="tool-icon translate-icon">
-                            <i class="fas fa-language"></i>
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>What video quality can I download?</h3>
+                            <i class="fas fa-chevron-down"></i>
                         </div>
-                        <h3>Translate Audio to Text</h3>
-                        <p>Quickly translate audio to text with high accuracy using our easy-to-use tool.</p>
+                        <div class="faq-answer">
+                            <p>You can download videos in their original quality, up to 4K (if available). We support various formats including MP4, WebM, and audio-only MP3.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>What is Aria2 and why is it recommended?</h3>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Aria2 is a lightweight multi-protocol download utility that enables multi-threaded downloading. It significantly increases download speed by creating multiple connections to the server.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>Why would I need to use a proxy?</h3>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Proxies can help if YouTube is restricted in your region or if you want to maintain privacy. They can also help bypass some download throttling.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="about" id="about">
+            <div class="container">
+                <h2>About 4K Video Reaper</h2>
+                <p>4K Video Reaper is an advanced YouTube video downloader built with Python. It leverages multiple technologies to provide fast, reliable downloads with additional features not found in typical downloaders.</p>
+                
+                <div class="tech-stack">
+                    <h3>Technologies Used</h3>
+                    <div class="tech-icons">
+                        <div class="tech-icon">
+                            <i class="fab fa-python"></i>
+                            <span>Python</span>
+                        </div>
+                        <div class="tech-icon">
+                            <img src="aria2-icon.svg" alt="Aria2">
+                            <span>Aria2</span>
+                        </div>
+                        <div class="tech-icon">
+                            <img src="ytdlp-icon.svg" alt="yt-dlp">
+                            <span>yt-dlp</span>
+                        </div>
+                        <div class="tech-icon">
+                            <i class="fas fa-server"></i>
+                            <span>Flask API</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -169,26 +308,25 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-logo">
-                    <img src="logo.svg" alt="VideoGrab Logo">
-                    <span>VideoGrab</span>
+                    <img src="logo.svg" alt="4K Video Reaper Logo">
+                    <span>4K Video Reaper</span>
                 </div>
                 <div class="footer-links">
                     <div class="footer-column">
-                        <h4>Products</h4>
+                        <h4>Quick Links</h4>
                         <ul>
-                            <li><a href="#">YouTube Downloader</a></li>
-                            <li><a href="#">MP4 Converter</a></li>
-                            <li><a href="#">Transcription Tool</a></li>
-                            <li><a href="#">Audio Extractor</a></li>
+                            <li><a href="#">Home</a></li>
+                            <li><a href="#batch-download">Batch Download</a></li>
+                            <li><a href="#about">About</a></li>
+                            <li><a href="#faq">FAQ</a></li>
                         </ul>
                     </div>
                     <div class="footer-column">
-                        <h4>Company</h4>
+                        <h4>Resources</h4>
                         <ul>
-                            <li><a href="#">About Us</a></li>
-                            <li><a href="#">Blog</a></li>
-                            <li><a href="#">Careers</a></li>
-                            <li><a href="#">Contact</a></li>
+                            <li><a href="https://github.com/stickerverse/4KVideoReaper" target="_blank">GitHub Repository</a></li>
+                            <li><a href="https://github.com/stickerverse/4KVideoReaper/issues" target="_blank">Report Issues</a></li>
+                            <li><a href="https://github.com/stickerverse/4KVideoReaper/wiki" target="_blank">Documentation</a></li>
                         </ul>
                     </div>
                     <div class="footer-column">
@@ -197,18 +335,14 @@
                             <li><a href="#">Terms of Service</a></li>
                             <li><a href="#">Privacy Policy</a></li>
                             <li><a href="#">DMCA</a></li>
-                            <li><a href="#">Cookie Policy</a></li>
                         </ul>
                     </div>
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2025 VideoGrab. All rights reserved.</p>
+                <p>&copy; 2025 4K Video Reaper. All rights reserved.</p>
                 <div class="social-icons">
-                    <a href="#"><i class="fab fa-twitter"></i></a>
-                    <a href="#"><i class="fab fa-facebook"></i></a>
-                    <a href="#"><i class="fab fa-instagram"></i></a>
-                    <a href="#"><i class="fab fa-youtube"></i></a>
+                    <a href="https://github.com/stickerverse/4KVideoReaper" target="_blank"><i class="fab fa-github"></i></a>
                 </div>
             </div>
         </div>
