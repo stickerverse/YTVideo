@@ -1,13 +1,60 @@
 [Unit]
-Description=4K Video Reaper Web Service
-After=network.target
+Description=4K Video Reaper - Advanced YouTube Downloader
+Documentation=https://github.com/yourusername/4KVideoReaper
+After=network.target postgresql.service
+Wants=network-online.target
 
 [Service]
+Type=simple
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/4KVideoReaper/web
-Environment="PATH=/var/www/4KVideoReaper/venv/bin"
-ExecStart=/var/www/4KVideoReaper/venv/bin/gunicorn --workers 3 --bind unix:4kvideoreaper.sock -m 007 wsgi:app
+WorkingDirectory=/var/www/4KVideoReaper
+
+# Environment setup
+EnvironmentFile=-/var/www/4KVideoReaper/.env
+Environment="PATH=/var/www/4KVideoReaper/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/var/www/4KVideoReaper"
+Environment="DOWNLOAD_DIR=/var/www/4KVideoReaper/downloads"
+Environment="LOG_DIR=/var/log/4kvideoreaper"
+Environment="ENVIRONMENT=production"
+
+# Start command
+ExecStart=/var/www/4KVideoReaper/venv/bin/gunicorn \
+    --workers 4 \
+    --threads 2 \
+    --bind unix:/var/www/4KVideoReaper/4kvideoreaper.sock \
+    --access-logfile /var/log/4kvideoreaper/access.log \
+    --error-logfile /var/log/4kvideoreaper/error.log \
+    --log-level info \
+    --capture-output \
+    --timeout 120 \
+    web.wsgi:app
+
+# Restart on failure
+Restart=on-failure
+RestartSec=5s
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Security hardening
+CapabilityBoundingSet=
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+ReadWritePaths=/var/www/4KVideoReaper/downloads /var/log/4kvideoreaper
+ReadOnlyPaths=/var/www/4KVideoReaper/web /var/www/4KVideoReaper/youtube_downloader
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+TasksMax=100
+MemoryLimit=2G
+CPUQuota=80%
+
+# Monitoring
+WatchdogSec=30s
 
 [Install]
 WantedBy=multi-user.target
