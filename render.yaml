@@ -1,0 +1,27 @@
+services:
+  # Web API Service
+  - type: web
+    name: 4kvideoreaper-api
+    env: docker
+    region: ohio  # Choose a region closest to your users
+    plan: free
+    healthCheckPath: /api/status
+    envVars:
+      - key: DOWNLOAD_DIR
+        value: /var/data/downloads
+      - key: LOG_DIR
+        value: /var/log/4kvideoreaper
+      - key: ARIA2_ENABLED
+        value: true
+      - key: ARIA2_MAX_CONNECTIONS
+        value: 8
+      - key: ARIA2_SPLIT
+        value: 8
+      - key: BATCH_MAX_CONCURRENT
+        value: 2  # Lower concurrency for free tier
+      - key: ENVIRONMENT
+        value: production
+    disk:
+      name: downloads
+      mountPath: /var/data/downloads
+      sizeGB: 1  # 1GB storage in free tier
