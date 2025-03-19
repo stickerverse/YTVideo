@@ -10,19 +10,6 @@ mkdir -p /tmp/downloads
 mkdir -p /tmp/logs
 echo "Created temporary directories"
 
-# Create __init__.py files
-echo "Creating __init__.py files..."
-touch __init__.py
-mkdir -p youtube_downloader
-touch youtube_downloader/__init__.py
-for dir in $(find youtube_downloader -type d); do
-  touch "$dir/__init__.py"
-  echo "Created $dir/__init__.py"
-done
-mkdir -p web
-touch web/__init__.py
-echo "Created web/__init__.py"
-
 # Set Python path
 export PYTHONPATH=$PYTHONPATH:/app
 echo "PYTHONPATH: $PYTHONPATH"
@@ -36,6 +23,19 @@ pip install -r web/requirements.txt
 # Install the package in development mode with verbose output
 echo "Installing the package in development mode..."
 pip install -e . -v
+
+# Create __init__.py files if they don't exist
+echo "Creating __init__.py files..."
+touch __init__.py
+mkdir -p youtube_downloader
+touch youtube_downloader/__init__.py
+
+# Create directories and init files for modules
+for dir in downloaders services utils ui web; do
+    mkdir -p youtube_downloader/$dir
+    touch youtube_downloader/$dir/__init__.py
+    echo "Created youtube_downloader/$dir/__init__.py"
+done
 
 # Print debug info
 echo "Current directory: $(pwd)"
@@ -54,6 +54,19 @@ try:
   print('youtube_downloader location:', youtube_downloader.__file__)
 except ImportError as e:
   print('Failed to import youtube_downloader:', str(e))
+"
+
+# Test the wsgi import
+echo "Testing WSGI import..."
+python -c "
+import os
+import sys
+sys.path.insert(0, os.path.abspath('.'))
+try:
+  from web.wsgi import app
+  print('Successfully imported app from web.wsgi')
+except Exception as e:
+  print('Failed to import app from web.wsgi:', str(e))
 "
 
 # Print versions for debugging
