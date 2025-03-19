@@ -1,9 +1,15 @@
 import os
+import sys
+
+# Add the parent directory to the Python path to import the YouTube downloader modules
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+
 import threading
 import time
 import uuid
 import json
-import sys
 import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
@@ -13,9 +19,6 @@ from flask import Flask, request, jsonify, send_file, render_template, abort, g,
 from flask_cors import CORS
 import yt_dlp
 from functools import wraps
-
-# Add the parent directory to the Python path to import the YouTube downloader modules
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Import modules from your YouTube downloader
 from youtube_downloader.config import config
@@ -28,7 +31,6 @@ from youtube_downloader.utils.logger import (
     log_exception, log_download_start, log_download_complete, log_download_error,
     log_api_request
 )
-
 # Initialize Flask app
 app = Flask(__name__, static_folder='public', static_url_path='')
 CORS(app)  # Enable Cross-Origin Resource Sharing
