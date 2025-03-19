@@ -21,3 +21,5 @@ services:
         value: 2  # Lower concurrency for free tier
       - key: ENVIRONMENT
         value: production
+      - key: PYTHONPATH
+        value: /app
