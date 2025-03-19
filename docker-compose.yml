@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./downloads:/app/downloads
+      - ./config:/app/config
+      - ./logs:/app/logs
+    environment:
+      - DOWNLOAD_DIR=/app/downloads
+      - ARIA2_ENABLED=true
+      - ARIA2_MAX_CONNECTIONS=8
+      - ARIA2_SPLIT=8
+      - BATCH_MAX_CONCURRENT=5
+      - CAPTCHA_API_KEY=${CAPTCHA_API_KEY:-}
+      - DEFAULT_PROXY=${DEFAULT_PROXY:-}
+    depends_on:
+      - nginx
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./nginx/static:/usr/share/nginx/html
+      - ./web/public:/usr/share/nginx/html/static
+    depends_on:
+      - web
+
+volumes:
+  downloads:
+  config:
+  logs:
