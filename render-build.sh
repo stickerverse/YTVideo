@@ -7,6 +7,9 @@ set -o errexit
 mkdir -p /tmp/downloads
 mkdir -p /tmp/logs
 
+# Set Python path
+export PYTHONPATH=$PYTHONPATH:/app
+
 # Install dependencies
 pip install --upgrade pip
 pip install -r requirements.txt
