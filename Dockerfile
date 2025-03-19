@@ -36,7 +36,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DOWNLOAD_DIR=/var/data/downloads \
     LOG_DIR=/app/logs \
     CONFIG_DIR=/app/config \
-    PORT=10000
+    PORT=10000 \
+    PYTHONPATH=/app
 
 # Create a non-root user and set proper permissions
 RUN useradd -m appuser \
