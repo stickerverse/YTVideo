@@ -4,8 +4,8 @@
 set -o errexit
 
 # Create necessary directories
-mkdir -p /var/data/downloads
-mkdir -p /app/logs
+mkdir -p /tmp/downloads
+mkdir -p /tmp/logs
 
 # Install dependencies
 pip install --upgrade pip
