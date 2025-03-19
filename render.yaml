@@ -6,19 +6,21 @@ services:
     region: ohio  # Choose a region closest to your users
     plan: free
     healthCheckPath: /api/status
+    buildCommand: ./render-build.sh
+    startCommand: gunicorn web.wsgi:app --log-level debug --workers 1 --timeout 120 --bind 0.0.0.0:$PORT
     envVars:
       - key: DOWNLOAD_DIR
         value: /tmp/downloads
       - key: LOG_DIR
         value: /tmp/logs
       - key: ARIA2_ENABLED
-        value: true
+        value: "true"
       - key: ARIA2_MAX_CONNECTIONS
-        value: 8
+        value: "8"
       - key: ARIA2_SPLIT
-        value: 8
+        value: "8"
       - key: BATCH_MAX_CONCURRENT
-        value: 2  # Lower concurrency for free tier
+        value: "2"  # Lower concurrency for free tier
       - key: ENVIRONMENT
         value: production
       - key: PYTHONPATH
