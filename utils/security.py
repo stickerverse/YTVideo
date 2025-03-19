@@ -243,4 +243,96 @@ def rate_limit(limit: int, period: int = 60):
                 }), 429
             
             # Set rate limit headers
-            response
+            response = f(*args, **kwargs)
+            response.headers['X-RateLimit-Limit'] = str(limit)
+            response.headers['X-RateLimit-Remaining'] = str(limit - rate_limits[key]['count'])
+            response.headers['X-RateLimit-Reset'] = str(int(rate_limits[key]['reset_time']))
+            
+            return response
+            
+        return wrapper
+    return decorator
+
+
+def validate_youtube_url(url: str) -> bool:
+    """
+    Validate if a URL is a proper YouTube URL
+    
+    Args:
+        url: URL to validate
+        
+    Returns:
+        True if valid YouTube URL, False otherwise
+    """
+    if not is_valid_url(url):
+        return False
+        
+    # YouTube URL patterns
+    youtube_patterns = [
+        r'^(https?://)?(www\.)?youtube\.com/watch\?v=[\w-]+',
+        r'^(https?://)?(www\.)?youtu\.be/[\w-]+'
+    ]
+    
+    return any(re.match(pattern, url) for pattern in youtube_patterns)
+
+
+def is_safe_path(base_dir: str, path: str) -> bool:
+    """
+    Check if a path is safe (doesn't escape the base directory)
+    
+    Args:
+        base_dir: Base directory
+        path: Path to check
+        
+    Returns:
+        True if the path is safe, False otherwise
+    """
+    # Normalize paths
+    base_dir = os.path.normpath(os.path.abspath(base_dir))
+    path = os.path.normpath(os.path.abspath(path))
+    
+    # Check if path starts with base_dir
+    return path.startswith(base_dir)
+
+
+def is_safe_ip(ip: str) -> bool:
+    """
+    Check if an IP address is safe (not private or reserved)
+    
+    Args:
+        ip: IP address to check
+        
+    Returns:
+        True if the IP is safe, False otherwise
+    """
+    try:
+        ip_obj = ipaddress.ip_address(ip)
+        return not (ip_obj.is_private or ip_obj.is_reserved or ip_obj.is_loopback)
+    except ValueError:
+        return False
+
+
+def generate_csrf_token() -> str:
+    """
+    Generate a CSRF token
+    
+    Returns:
+        CSRF token
+    """
+    return secrets.token_hex(16)
+
+
+def create_api_key() -> Tuple[str, str]:
+    """
+    Create an API key and secret
+    
+    Returns:
+        Tuple of (api_key, api_secret)
+    """
+    api_key = f"4kvr_{secrets.token_hex(16)}"
+    api_secret = secrets.token_urlsafe(32)
+    
+    # Store hashed secret
+    hashed_secret = hashlib.sha256(api_secret.encode()).hexdigest()
+    
+    return api_key, api_secret
