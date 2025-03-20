@@ -3,11 +3,11 @@ services:
   - type: web
     name: 4kvideoreaper-api
     env: docker
-    region: ohio  # Choose a region closest to your users
+    region: ohio
     plan: free
     healthCheckPath: /api/status
-    buildCommand: ./render-build.sh
-    startCommand: gunicorn web.wsgi:app --log-level debug --workers 1 --timeout 120 --bind 0.0.0.0:$PORT
+    buildCommand: bash render-build.sh
+    startCommand: gunicorn --log-level=debug --workers=1 --timeout=120 --bind=0.0.0.0:$PORT web.wsgi:app
     envVars:
       - key: DOWNLOAD_DIR
         value: /tmp/downloads
@@ -15,13 +15,7 @@ services:
         value: /tmp/logs
       - key: ARIA2_ENABLED
         value: "true"
-      - key: ARIA2_MAX_CONNECTIONS
-        value: "8"
-      - key: ARIA2_SPLIT
-        value: "8"
-      - key: BATCH_MAX_CONCURRENT
-        value: "2"  # Lower concurrency for free tier
-      - key: ENVIRONMENT
-        value: production
       - key: PYTHONPATH
         value: /app
+      - key: ENVIRONMENT
+        value: production
