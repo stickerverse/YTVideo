@@ -14,6 +14,13 @@ echo "Created temporary directories"
 echo "Creating Python package structure..."
 python create_init_files.py
 
+# Install required system dependencies
+echo "Installing system dependencies..."
+apt-get update
+apt-get install -y --no-install-recommends ffmpeg aria2
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+
 # Set Python path
 export PYTHONPATH=$PYTHONPATH:/app
 echo "PYTHONPATH: $PYTHONPATH"
@@ -28,6 +35,9 @@ pip install --upgrade pip
 pip install -r requirements.txt
 pip install -r web/requirements.txt
 pip install -e .
+
+# Install additional packages specifically needed for video processing
+pip install --no-cache-dir yt-dlp requests flask flask-cors psutil
 
 # Print debug info
 echo "Current directory: $(pwd)"
@@ -45,6 +55,11 @@ except ImportError as e:
   print('Failed to import youtube_downloader:', str(e))
 "
 
+# Check for necessary executables
+echo "Checking for required executables..."
+which ffmpeg && echo "ffmpeg found" || echo "ffmpeg NOT found"
+which aria2c && echo "aria2c found" || echo "aria2c NOT found"
+
 # Print versions for debugging
 echo "Python version: $(python --version)"
 if command -v aria2c > /dev/null; then
@@ -52,5 +67,25 @@ if command -v aria2c > /dev/null; then
 else
   echo "Aria2 not installed"
 fi
+if command -v ffmpeg > /dev/null; then
+  echo "FFmpeg version: $(ffmpeg -version | head -n 1)"
+else
+  echo "FFmpeg not installed"
+fi
+
+# Copy the production API code to the right location
+echo "Setting up production API..."
+cp -f web/api.py web/api.py.bak || true
+echo "API backup created"
+
+# Test the API import
+echo "Testing API import..."
+python -c "
+try:
+  from web.api import app
+  print('Successfully imported app from web.api')
+except Exception as e:
+  print('Error importing app:', str(e))
+"
 
 echo "Build completed successfully!"
