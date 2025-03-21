@@ -1,38 +1,60 @@
 #!/bin/bash
 set -e
 
+# Print environment information
+echo "Starting 4K Video Reaper in ${ENVIRONMENT:-production} mode"
+echo "Download directory: ${DOWNLOAD_DIR:-/app/downloads}"
+echo "Log directory: ${LOG_DIR:-/app/logs}"
+echo "Port: ${PORT:-8000}"
+
 # Create necessary directories
-mkdir -p "${DOWNLOAD_DIR:-/tmp/downloads}"
+mkdir -p "${DOWNLOAD_DIR:-/app/downloads}"
 mkdir -p "${LOG_DIR:-/app/logs}"
 
-# Setup a cleanup cron job if running in production
+# Set correct permissions
+chown -R app:app "${DOWNLOAD_DIR:-/app/downloads}"
+chown -R app:app "${LOG_DIR:-/app/logs}"
+
+# Run database migrations if applicable (placeholder)
+# python manage.py db upgrade
+
+# Run initial setup scripts
+python create_init_files.py
+
+# Optional: Setup periodic cleanup cron job
 if [ "$ENVIRONMENT" = "production" ]; then
-    # Run cleanup script every hour in the background
-    echo "Setting up hourly cleanup job..."
-    (while true; do 
-        python /app/cleanup.py --dir="${DOWNLOAD_DIR:-/tmp/downloads}" --max-age=24
-        sleep 3600
-    done) &
+    # Run cleanup script every hour
+    (
+        while true; do 
+            python cleanup.py --dir="${DOWNLOAD_DIR:-/app/downloads}" --max-age=24
+            sleep 3600
+        done
+    ) &
 fi
 
-# Run health check in the background
-echo "Setting up health check..."
-(while true; do 
-    python /app/healthcheck.py --api-url="http://localhost:${PORT:-10000}/api/status" --downloads-dir="${DOWNLOAD_DIR:-/tmp/downloads}"
-    sleep 300
-done) &
-
-# Print environment information
-echo "Environment: ${ENVIRONMENT:-development}"
-echo "Download directory: ${DOWNLOAD_DIR:-/tmp/downloads}"
-echo "Log directory: ${LOG_DIR:-/app/logs}"
-echo "Port: ${PORT:-10000}"
+# Optional: Health monitoring
+(
+    while true; do 
+        python healthcheck.py \
+            --api-url="http://localhost:${PORT}/api/status" \
+            --downloads-dir="${DOWNLOAD_DIR:-/app/downloads}"
+        sleep 300
+    done
+) &
 
 # Check for required executables
-echo "Checking for required executables..."
-which ffmpeg && echo "ffmpeg found" || echo "ffmpeg NOT found"
-which aria2c && echo "aria2c found" || echo "aria2c NOT found"
+echo "Checking system dependencies..."
+which ffmpeg && echo "FFmpeg found" || echo "FFmpeg NOT found"
+which aria2c && echo "Aria2c found" || echo "Aria2c NOT found"
+which python && echo "Python found" || echo "Python NOT found"
 
-# Run the command
-echo "Starting 4K Video Reaper..."
+# Generate a unique machine ID for tracking (optional)
+if [ ! -f /app/.machine-id ]; then
+    cat /proc/sys/kernel/random/uuid > /app/.machine-id
+fi
+
+# Final startup message
+echo "4K Video Reaper is ready to serve downloads!"
+
+# Execute the main command
 exec "$@"
