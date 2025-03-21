@@ -14,9 +14,12 @@ import json
 import logging
 import threading
 import traceback
+import shutil
+import secrets
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 from datetime import datetime, timedelta
+from functools import wraps
 
 import yt_dlp
 import requests
@@ -24,6 +27,8 @@ import flask
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_talisman import Talisman
 
 # Logging Configuration
 logging.basicConfig(
@@ -41,13 +46,13 @@ class Config:
     """Application configuration management"""
     
     # Core Configuration
-    DOWNLOAD_DIR = os.environ.get('DOWNLOAD_DIR', '/tmp/youtube_downloads')
-    MAX_CONCURRENT_DOWNLOADS = int(os.environ.get('MAX_CONCURRENT_DOWNLOADS', 5))
+    DOWNLOAD_DIR = os.environ.get('DOWNLOAD_DIR', '/tmp/downloads')
+    MAX_CONCURRENT_DOWNLOADS = int(os.environ.get('MAX_CONCURRENT_DOWNLOADS', 3))
     RATE_LIMIT_REQUESTS = int(os.environ.get('RATE_LIMIT_REQUESTS', 10))
     RATE_LIMIT_PERIOD = int(os.environ.get('RATE_LIMIT_PERIOD', 60))  # seconds
     
     # Security Settings
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'development_secret_key')
+    SECRET_KEY = os.environ.get('SECRET_KEY', secrets.token_hex(32))
     ALLOWED_DOMAINS = os.environ.get('ALLOWED_DOMAINS', 'youtube.com,youtu.be').split(',')
     
     # Proxy and External Service Configuration
@@ -64,34 +69,78 @@ os.makedirs(Config.DOWNLOAD_DIR, exist_ok=True)
 # Flask Application Setup
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = Config.MAX_VIDEO_SIZE_MB * 1024 * 1024
+app.config['SECRET_KEY'] = Config.SECRET_KEY
+
+# Apply proxy fix for proper IP detection behind proxies
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# Enable CORS for all origins
 CORS(app)
+
+# Enable Talisman for security headers in production
+if os.environ.get('ENVIRONMENT') == 'production':
+    talisman = Talisman(
+        app,
+        content_security_policy={
+            'default-src': "'self'",
+            'img-src': "'self' data: https:",
+            'script-src': "'self' https://cdnjs.cloudflare.com",
+            'style-src': "'self' https://cdnjs.cloudflare.com https://fonts.googleapis.com 'unsafe-inline'",
+            'font-src': "'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+            'connect-src': "'self'"
+        },
+        force_https=False,  # Set to True if you're using HTTPS directly (not behind proxy)
+        strict_transport_security=True,
+        strict_transport_security_preload=True,
+        session_cookie_secure=True,
+        referrer_policy='no-referrer-when-downgrade'
+    )
 
 # Rate Limiting and Download Tracking
 class RateLimiter:
-    """Simple in-memory rate limiting implementation"""
-    _request_counts: Dict[str, Dict[str, Any]] = {}
+    """Improved in-memory rate limiting implementation with IP tracking"""
+    _request_counts = {}
+    _cleanup_time = time.time()
+    _lock = threading.Lock()
     
     @classmethod
     def is_allowed(cls, ip: str) -> bool:
         """Check if the IP is allowed to make a request"""
         now = time.time()
-        ip_data = cls._request_counts.get(ip, {})
         
-        # Clean up old request counts
-        ip_data = {
-            timestamp: count 
-            for timestamp, count in ip_data.items() 
-            if now - timestamp < Config.RATE_LIMIT_PERIOD
-        }
-        
-        # Count requests in the current period
-        total_requests = sum(ip_data.values())
-        
-        # Add current request
-        ip_data[now] = ip_data.get(now, 0) + 1
-        cls._request_counts[ip] = ip_data
-        
-        return total_requests < Config.RATE_LIMIT_REQUESTS
+        # Clean up old entries every 10 minutes
+        with cls._lock:
+            if now - cls._cleanup_time > 600:  # 10 minutes
+                cls._cleanup()
+                cls._cleanup_time = now
+            
+            # Initialize if IP not seen before
+            if ip not in cls._request_counts:
+                cls._request_counts[ip] = {
+                    'count': 0,
+                    'reset_time': now + Config.RATE_LIMIT_PERIOD
+                }
+            
+            ip_data = cls._request_counts[ip]
+            
+            # Reset if period has passed
+            if now > ip_data['reset_time']:
+                ip_data['count'] = 0
+                ip_data['reset_time'] = now + Config.RATE_LIMIT_PERIOD
+            
+            # Increment and check
+            ip_data['count'] += 1
+            
+            return ip_data['count'] <= Config.RATE_LIMIT_REQUESTS
+    
+    @classmethod
+    def _cleanup(cls):
+        """Remove expired entries"""
+        now = time.time()
+        for ip in list(cls._request_counts.keys()):
+            if now > cls._request_counts[ip]['reset_time']:
+                del cls._request_counts[ip]
+
 
 class DownloadManager:
     """Manages download tracking and processing"""
@@ -129,6 +178,59 @@ class DownloadManager:
         """Retrieve download information"""
         return cls._downloads.get(download_id)
 
+    @classmethod
+    def cleanup_old_downloads(cls, max_age_hours: int = 24):
+        """Remove old download entries"""
+        with cls._lock:
+            current_time = time.time()
+            max_age_seconds = max_age_hours * 3600
+            
+            for download_id in list(cls._downloads.keys()):
+                download = cls._downloads[download_id]
+                age = current_time - download.get('started_at', 0)
+                
+                if age > max_age_seconds:
+                    # Try to remove the file if it exists
+                    file_path = download.get('file_path')
+                    if file_path and os.path.exists(file_path):
+                        try:
+                            os.remove(file_path)
+                            logger.info(f"Removed old download file: {file_path}")
+                        except Exception as e:
+                            logger.error(f"Error removing file {file_path}: {e}")
+                    
+                    # Remove the download entry
+                    del cls._downloads[download_id]
+                    logger.info(f"Removed old download entry: {download_id}")
+
+
+def api_error_handler(f):
+    """Error handling decorator for API endpoints"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except ValueError as e:
+            logger.warning(f"Client error: {str(e)}")
+            return jsonify({
+                'error': str(e),
+                'status': 'error'
+            }), 400
+        except RuntimeError as e:
+            logger.error(f"Service error: {str(e)}")
+            return jsonify({
+                'error': "Service temporarily unavailable. Please try again later.",
+                'status': 'error'
+            }), 503
+        except Exception as e:
+            logger.critical(f"Unexpected error: {str(e)}", exc_info=True)
+            return jsonify({
+                'error': "An unexpected error occurred",
+                'status': 'error'
+            }), 500
+    return decorated_function
+
+
 def validate_youtube_url(url: str) -> bool:
     """
     Validate if the URL is a legitimate YouTube URL
@@ -147,6 +249,7 @@ def validate_youtube_url(url: str) -> bool:
     ]
     return any(re.match(pattern, url) for pattern in youtube_patterns)
 
+
 def sanitize_filename(filename: str) -> str:
     """
     Sanitize a filename to remove potentially dangerous characters
@@ -162,6 +265,85 @@ def sanitize_filename(filename: str) -> str:
     # Limit filename length
     filename = filename[:255]
     return filename
+
+
+def check_disk_space():
+    """
+    Check available disk space and perform aggressive cleanup if needed
+    """
+    try:
+        # Get disk stats
+        stats = shutil.disk_usage(Config.DOWNLOAD_DIR)
+        free_space_mb = stats.free / (1024 * 1024)
+        total_space_mb = stats.total / (1024 * 1024)
+        used_percent = (stats.used / stats.total) * 100
+        
+        logger.info(f"Disk space: {free_space_mb:.2f}MB free out of {total_space_mb:.2f}MB total ({used_percent:.1f}% used)")
+        
+        # If less than 500MB free or more than 80% used, perform aggressive cleanup
+        if free_space_mb < 500 or used_percent > 80:
+            logger.warning(f"Low disk space: {free_space_mb:.2f}MB free, {used_percent:.1f}% used. Performing aggressive cleanup.")
+            # Clean up downloads older than 1 hour
+            cleanup_old_files(Config.DOWNLOAD_DIR, max_age_hours=1)
+            
+            # If still critical (less than 100MB), remove all files
+            stats = shutil.disk_usage(Config.DOWNLOAD_DIR)
+            free_space_mb = stats.free / (1024 * 1024)
+            if free_space_mb < 100:
+                logger.critical(f"Critical disk space: {free_space_mb:.2f}MB free. Removing all downloads.")
+                cleanup_old_files(Config.DOWNLOAD_DIR, max_age_hours=0)
+                
+        return free_space_mb
+        
+    except Exception as e:
+        logger.error(f"Error checking disk space: {e}")
+        return 0
+
+
+def cleanup_old_files(directory: str, max_age_hours: int = 24):
+    """
+    Clean up old files in a directory
+    
+    Args:
+        directory: Directory to clean
+        max_age_hours: Maximum age of files in hours before deletion
+    """
+    if not os.path.exists(directory):
+        logger.warning(f"Directory does not exist: {directory}")
+        return
+    
+    try:
+        current_time = time.time()
+        # Convert hours to seconds
+        max_age_seconds = max_age_hours * 3600
+        
+        # If max_age_hours is 0, delete all files
+        if max_age_hours == 0:
+            logger.warning(f"Removing ALL files from {directory}")
+            for filename in os.listdir(directory):
+                file_path = os.path.join(directory, filename)
+                if os.path.isfile(file_path):
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"Removed file: {file_path}")
+                    except Exception as e:
+                        logger.error(f"Error removing file {file_path}: {e}")
+            return
+        
+        # Otherwise delete files older than max_age_hours
+        for filename in os.listdir(directory):
+            file_path = os.path.join(directory, filename)
+            if os.path.isfile(file_path):
+                file_age = current_time - os.path.getmtime(file_path)
+                if file_age > max_age_seconds:
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"Removed old file: {file_path} (age: {file_age/3600:.1f} hours)")
+                    except Exception as e:
+                        logger.error(f"Error removing file {file_path}: {e}")
+    except Exception as e:
+        logger.error(f"Error during cleanup: {e}")
+
 
 def get_video_info(url: str, use_proxy: bool = False) -> Dict[str, Any]:
     """
@@ -182,6 +364,8 @@ def get_video_info(url: str, use_proxy: bool = False) -> Dict[str, Any]:
             'skip_download': True,
             'nooverwrites': True,
             'no_color': True,
+            'socket_timeout': 30,  # 30 second timeout
+            'retries': 3,          # Retry 3 times on failure
         }
         
         # Add proxy if requested and available
@@ -224,6 +408,51 @@ def get_video_info(url: str, use_proxy: bool = False) -> Dict[str, Any]:
         logger.error(f"Video info retrieval error: {e}")
         raise ValueError(f"Could not retrieve video information: {str(e)}")
 
+
+def serve_and_delete(file_path, filename):
+    """
+    Serve a file for download and schedule it for deletion after a short delay
+    
+    Args:
+        file_path: Path to the file
+        filename: Desired filename for download
+    
+    Returns:
+        Flask response for file download
+    """
+    if not os.path.exists(file_path):
+        return jsonify({
+            'error': 'File not found',
+            'status': 'error'
+        }), 404
+    
+    # Schedule file for deletion after a delay (30 seconds)
+    def delete_after_delay(path, delay=30):
+        def delayed_delete():
+            time.sleep(delay)
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+                    logger.info(f"Deleted file after serving: {path}")
+            except Exception as e:
+                logger.error(f"Error deleting file {path}: {e}")
+        
+        # Start a thread to delete the file
+        thread = threading.Thread(target=delayed_delete, daemon=True)
+        thread.start()
+    
+    # Schedule deletion
+    delete_after_delay(file_path)
+    
+    # Serve the file
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/octet-stream'
+    )
+
+
 def download_video(download_id: str, url: str, format_id: str, subtitles: bool = False):
     """
     Download a YouTube video
@@ -238,6 +467,11 @@ def download_video(download_id: str, url: str, format_id: str, subtitles: bool =
         # Update download status to processing
         DownloadManager.update_download(download_id, status='downloading')
         
+        # Check disk space
+        free_space_mb = check_disk_space()
+        if free_space_mb < 100:
+            raise RuntimeError(f"Insufficient disk space: {free_space_mb:.2f}MB free")
+        
         # Prepare download options
         ydl_opts = {
             'format': format_id,
@@ -248,6 +482,17 @@ def download_video(download_id: str, url: str, format_id: str, subtitles: bool =
             'noplaylist': True,
             'writesubtitles': subtitles,
             'subtitleslangs': ['en'] if subtitles else [],
+            # Add request timeout
+            'socket_timeout': 30,
+            # Add retry settings
+            'retries': 3,
+            'fragment_retries': 3,
+            # Add format sorting
+            'format_sort': ['res:1080', 'ext:mp4:m4a', 'size'],
+            # Add postprocessor options for better format conversions
+            'postprocessor_args': {
+                'ffmpeg': ['-threads', '2', '-cpu-used', '0', '-b:v', '0', '-crf', '22']
+            }
         }
         
         # Add proxy if configured
@@ -255,21 +500,47 @@ def download_video(download_id: str, url: str, format_id: str, subtitles: bool =
             ydl_opts['proxy'] = Config.DEFAULT_PROXY
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            
-            # Prepare file path
-            filename = ydl.prepare_filename(info)
-            
-            # Update download with file information
-            DownloadManager.update_download(
-                download_id, 
-                status='completed', 
-                file_path=filename,
-                progress=100
+            # Start download with timeout
+            download_thread = threading.Thread(
+                target=lambda: ydl.extract_info(url, download=True)
             )
+            download_thread.start()
+            
+            # Wait for download to complete or timeout
+            download_thread.join(timeout=Config.MAX_DOWNLOAD_DURATION_SECONDS)
+            
+            if download_thread.is_alive():
+                # Download is taking too long, cancel it
+                DownloadManager.update_download(
+                    download_id, 
+                    status='failed', 
+                    error='Download timeout exceeded',
+                    progress=0
+                )
+                logger.warning(f"Download timeout for {download_id}")
+                return
+            
+            # Find the downloaded file
+            for filename in os.listdir(Config.DOWNLOAD_DIR):
+                if filename.startswith(f"{download_id}_"):
+                    file_path = os.path.join(Config.DOWNLOAD_DIR, filename)
+                    
+                    # Update download with file information
+                    DownloadManager.update_download(
+                        download_id, 
+                        status='completed', 
+                        file_path=file_path,
+                        progress=100
+                    )
+                    
+                    logger.info(f"Download completed: {file_path}")
+                    return file_path
+            
+            # If we get here, no file was found
+            raise RuntimeError("Download completed but no file was found")
     
-    except Exception as e:
-        # Handle and log download errors
+    except yt_dlp.utils.DownloadError as e:
+        # Handle download errors
         logger.error(f"Download error for {download_id}: {e}")
         DownloadManager.update_download(
             download_id, 
@@ -277,6 +548,16 @@ def download_video(download_id: str, url: str, format_id: str, subtitles: bool =
             error=str(e),
             progress=0
         )
+    except Exception as e:
+        # Handle all other errors
+        logger.error(f"Unexpected error for {download_id}: {e}")
+        DownloadManager.update_download(
+            download_id, 
+            status='failed', 
+            error="An unexpected error occurred",
+            progress=0
+        )
+
 
 def progress_hook(download_id: str, d: Dict[str, Any]):
     """
@@ -298,21 +579,28 @@ def progress_hook(download_id: str, d: Dict[str, Any]):
             download_id, 
             progress=progress,
             downloaded_bytes=downloaded_bytes,
-            total_bytes=total_bytes
+            total_bytes=total_bytes,
+            speed=d.get('speed', 0),
+            eta=d.get('eta', 0)
         )
 
+
 @app.route('/api/video-info', methods=['GET'])
+@api_error_handler
 def video_info_endpoint():
     """
     API endpoint to retrieve YouTube video information
     """
     # Rate limiting
-    client_ip = request.remote_addr
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     if not RateLimiter.is_allowed(client_ip):
         return jsonify({
             'error': 'Rate limit exceeded. Please try again later.',
             'status': 'error'
         }), 429
+    
+    # Log request
+    logger.info(f"Video info request from {client_ip}")
     
     url = request.args.get('url')
     use_proxy = request.args.get('proxy', 'false').lower() == 'true'
@@ -329,37 +617,29 @@ def video_info_endpoint():
             'status': 'error'
         }), 400
     
-    try:
-        video_data = get_video_info(url, use_proxy)
-        return jsonify({
-            'status': 'success',
-            'data': video_data
-        })
-    
-    except ValueError as ve:
-        return jsonify({
-            'error': str(ve),
-            'status': 'error'
-        }), 400
-    except Exception as e:
-        logger.error(f"Unexpected error retrieving video info: {e}")
-        return jsonify({
-            'error': 'An unexpected error occurred',
-            'status': 'error'
-        }), 500
+    video_data = get_video_info(url, use_proxy)
+    return jsonify({
+        'status': 'success',
+        'data': video_data
+    })
+
 
 @app.route('/api/download', methods=['POST'])
+@api_error_handler
 def download_endpoint():
     """
     API endpoint to initiate a video download
     """
     # Rate limiting
-    client_ip = request.remote_addr
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     if not RateLimiter.is_allowed(client_ip):
         return jsonify({
             'error': 'Rate limit exceeded. Please try again later.',
             'status': 'error'
         }), 429
+    
+    # Log request
+    logger.info(f"Download request from {client_ip}")
     
     data = request.json
     
@@ -379,31 +659,33 @@ def download_endpoint():
             'status': 'error'
         }), 400
     
-    try:
-        # Create a download entry
-        download_id = DownloadManager.create_download(url, format_id)
-        
-        # Start download in a separate thread
-        download_thread = threading.Thread(
-            target=download_video, 
-            args=(download_id, url, format_id, download_subtitles),
-            daemon=True
-        )
-        download_thread.start()
-        
+    # Check disk space
+    free_space_mb = check_disk_space()
+    if free_space_mb < 100:
         return jsonify({
-            'status': 'success',
-            'downloadId': download_id
-        })
-    
-    except Exception as e:
-        logger.error(f"Download initiation error: {e}")
-        return jsonify({
-            'error': 'Failed to start download',
+            'error': f'Insufficient disk space: {free_space_mb:.2f}MB free',
             'status': 'error'
-        }), 500
+        }), 507  # Insufficient Storage
+    
+    # Create a download entry
+    download_id = DownloadManager.create_download(url, format_id)
+    
+    # Start download in a separate thread
+    download_thread = threading.Thread(
+        target=download_video, 
+        args=(download_id, url, format_id, download_subtitles),
+        daemon=True
+    )
+    download_thread.start()
+    
+    return jsonify({
+        'status': 'success',
+        'downloadId': download_id
+    })
+
 
 @app.route('/api/download-status', methods=['GET'])
+@api_error_handler
 def download_status_endpoint():
     """
     API endpoint to check download status
@@ -429,7 +711,9 @@ def download_status_endpoint():
         'data': download_info
     })
 
+
 @app.route('/api/download-file/<download_id>', methods=['GET'])
+@api_error_handler
 def download_file_endpoint(download_id):
     """
     API endpoint to serve downloaded file
@@ -440,139 +724,263 @@ def download_file_endpoint(download_id):
     Returns:
         File download or error response
     """
-    try:
-        # Retrieve download information
-        download_info = DownloadManager.get_download(download_id)
-        
-        if not download_info:
-            return jsonify({
-                'error': 'Download not found',
-                'status': 'error'
-            }), 404
-        
-        # Check download status
-        if download_info['status'] != 'completed':
-            return jsonify({
-                'error': 'Download not completed',
-                'status': 'error'
-            }), 400
-        
-        file_path = download_info.get('file_path')
-        
-        if not file_path or not os.path.exists(file_path):
-            return jsonify({
-                'error': 'File not found',
-                'status': 'error'
-            }), 404
-        
-        # Prepare file for download
-        try:
-            # Extract filename and sanitize
-            filename = os.path.basename(file_path)
-            sanitized_filename = secure_filename(filename)
-            
-            # Send file with proper headers
-            return send_file(
-                file_path, 
-                as_attachment=True, 
-                download_name=sanitized_filename,
-                mimetype='application/octet-stream'
-            )
-        except Exception as send_error:
-            logger.error(f"Error sending file: {send_error}")
-            return jsonify({
-                'error': 'Error preparing file for download',
-                'status': 'error'
-            }), 500
+    # Log request
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    logger.info(f"File download request from {client_ip} for {download_id}")
     
-    except Exception as e:
-        logger.error(f"Unexpected error in file download: {e}")
+    # Retrieve download information
+    download_info = DownloadManager.get_download(download_id)
+    
+    if not download_info:
         return jsonify({
-            'error': 'An unexpected error occurred',
+            'error': 'Download not found',
+            'status': 'error'
+        }), 404
+    
+    # Check download status
+    if download_info['status'] != 'completed':
+        return jsonify({
+            'error': 'Download not completed',
+            'status': 'error'
+        }), 400
+    
+    file_path = download_info.get('file_path')
+    
+    if not file_path or not os.path.exists(file_path):
+        return jsonify({
+            'error': 'File not found',
+            'status': 'error'
+        }), 404
+    
+    # Prepare file for download
+    try:
+        # Extract filename and sanitize
+        filename = os.path.basename(file_path)
+        sanitized_filename = secure_filename(filename)
+        
+        # Send file and schedule for deletion
+        return serve_and_delete(file_path, sanitized_filename)
+    except Exception as send_error:
+        logger.error(f"Error sending file: {send_error}")
+        return jsonify({
+            'error': 'Error preparing file for download',
             'status': 'error'
         }), 500
 
-# Periodic cleanup of old downloads
-def cleanup_old_downloads():
+
+@app.route('/api/batch-download', methods=['POST'])
+@api_error_handler
+def batch_download_endpoint():
     """
-    Remove old downloaded files and clean up download tracking
+    API endpoint to initiate a batch download
     """
-    try:
-        current_time = time.time()
-        max_age = 24 * 60 * 60  # 24 hours
+    # Rate limiting
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if not RateLimiter.is_allowed(client_ip):
+        return jsonify({
+            'error': 'Rate limit exceeded. Please try again later.',
+            'status': 'error'
+        }), 429
+    
+    # Log request
+    logger.info(f"Batch download request from {client_ip}")
+    
+    data = request.json
+    
+    urls = data.get('urls', [])
+    format_id = data.get('format', 'best')
+    download_subtitles = data.get('downloadSubtitles', False)
+    max_concurrent = min(int(data.get('maxConcurrent', Config.MAX_CONCURRENT_DOWNLOADS)), 
+                         Config.MAX_CONCURRENT_DOWNLOADS)
+    
+    if not urls or not isinstance(urls, list):
+        return jsonify({
+            'error': 'URLs list is required',
+            'status': 'error'
+        }), 400
+    
+    # Validate URLs
+    invalid_urls = [url for url in urls if not validate_youtube_url(url)]
+    if invalid_urls:
+        return jsonify({
+            'error': f'Found {len(invalid_urls)} invalid YouTube URLs',
+            'status': 'error',
+            'invalid_urls': invalid_urls
+        }), 400
+    
+    # Check disk space
+    free_space_mb = check_disk_space()
+    estimated_space_needed = len(urls) * 50  # Rough estimate: 50MB per video
+    if free_space_mb < estimated_space_needed:
+        return jsonify({
+            'error': f'Insufficient disk space for batch download. Available: {free_space_mb:.2f}MB, Estimated needed: {estimated_space_needed}MB',
+            'status': 'error'
+        }), 507  # Insufficient Storage
+    
+    # Create download entries and start downloads
+    download_ids = []
+    active_downloads = []
+    
+    for url in urls:
+        # Create download entry
+        download_id = DownloadManager.create_download(url, format_id)
+        download_ids.append(download_id)
         
-        # Cleanup downloaded files
-        with DownloadManager._lock:
-            for download_id, download_info in list(DownloadManager._downloads.items()):
-                # Remove downloads older than 24 hours
-                if current_time - download_info.get('started_at', 0) > max_age:
-                    file_path = download_info.get('file_path')
-                    
-                    # Remove file if it exists
-                    if file_path and os.path.exists(file_path):
-                        try:
-                            os.remove(file_path)
-                            logger.info(f"Removed old download file: {file_path}")
-                        except Exception as e:
-                            logger.error(f"Error removing file {file_path}: {e}")
-                    
-                    # Remove download tracking entry
-                    del DownloadManager._downloads[download_id]
+        # Start up to max_concurrent downloads immediately
+        if len(active_downloads) < max_concurrent:
+            download_thread = threading.Thread(
+                target=download_video, 
+                args=(download_id, url, format_id, download_subtitles),
+                daemon=True
+            )
+            download_thread.start()
+            active_downloads.append(download_thread)
+        else:
+            # Mark the rest as queued (they'll be started by the batch processor)
+            logger.info(f"Queued download {download_id} for later processing")
     
-    except Exception as e:
-        logger.error(f"Error during download cleanup: {e}")
-
-# Start cleanup thread
-def start_cleanup_thread():
-    """
-    Start a background thread for periodic download cleanup
-    """
-    def run_cleanup():
-        while True:
-            try:
-                cleanup_old_downloads()
-                # Sleep for 1 hour
-                time.sleep(60 * 60)
-            except Exception as e:
-                logger.error(f"Cleanup thread error: {e}")
-                # Sleep for a shorter period if an error occurs
-                time.sleep(10 * 60)
+    # Start a background thread to process the queue
+    def batch_processor():
+        """Process the batch download queue"""
+        remaining_downloads = list(zip(download_ids[max_concurrent:], urls[max_concurrent:]))
+        
+        for download_id, url in remaining_downloads:
+            # Wait for an active download to finish
+            while True:
+                active_downloads[:] = [t for t in active_downloads if t.is_alive()]
+                if len(active_downloads) < max_concurrent:
+                    break
+                time.sleep(1)
+            
+            # Start the next download
+            download_thread = threading.Thread(
+                target=download_video, 
+                args=(download_id, url, format_id, download_subtitles),
+                daemon=True
+            )
+            download_thread.start()
+            active_downloads.append(download_thread)
+            
+            # Brief pause to prevent overwhelming the system
+            time.sleep(1)
     
-    cleanup_thread = threading.Thread(target=run_cleanup, daemon=True)
-    cleanup_thread.start()
+    # Start the batch processor if there are more downloads than concurrent limit
+    if len(urls) > max_concurrent:
+        processor_thread = threading.Thread(target=batch_processor, daemon=True)
+        processor_thread.start()
+    
+    return jsonify({
+        'status': 'success',
+        'message': f'Started batch download with {len(urls)} videos',
+        'downloadIds': download_ids
+    })
 
-# API Status endpoint
+
+@app.route('/api/cancel-download', methods=['POST'])
+@api_error_handler
+def cancel_download_endpoint():
+    """
+    API endpoint to cancel a download
+    """
+    data = request.json
+    download_id = data.get('downloadId')
+    
+    if not download_id:
+        return jsonify({
+            'error': 'Download ID is required',
+            'status': 'error'
+        }), 400
+    
+    download_info = DownloadManager.get_download(download_id)
+    
+    if not download_info:
+        return jsonify({
+            'error': 'Download not found',
+            'status': 'error'
+        }), 404
+    
+    # Update download status
+    DownloadManager.update_download(download_id, status='cancelled')
+    
+    # If there's a file, try to remove it
+    file_path = download_info.get('file_path')
+    if file_path and os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+            logger.info(f"Removed cancelled download file: {file_path}")
+        except Exception as e:
+            logger.error(f"Error removing file {file_path}: {e}")
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Download cancelled'
+    })
+
+
 @app.route('/api/status', methods=['GET'])
+@api_error_handler
 def api_status_endpoint():
     """
     Provide API service status information
     """
+    # Get disk stats
     try:
-        # Collect system information
-        downloads_count = len(DownloadManager._downloads)
-        active_downloads = sum(1 for d in DownloadManager._downloads.values() if d['status'] == 'downloading')
-        
-        return jsonify({
-            'status': 'ok',
-            'version': '1.0.0',
-            'downloads': {
-                'total': downloads_count,
-                'active': active_downloads
-            },
-            'configuration': {
-                'max_concurrent_downloads': Config.MAX_CONCURRENT_DOWNLOADS,
-                'max_video_size_mb': Config.MAX_VIDEO_SIZE_MB,
-                'max_video_duration_seconds': Config.MAX_DOWNLOAD_DURATION_SECONDS
-            },
-            'server_time': int(time.time())
-        })
+        stats = shutil.disk_usage(Config.DOWNLOAD_DIR)
+        free_space_mb = stats.free / (1024 * 1024)
+        total_space_mb = stats.total / (1024 * 1024)
+        used_percent = (stats.used / stats.total) * 100
+    except:
+        free_space_mb = 0
+        total_space_mb = 0
+        used_percent = 0
     
-    except Exception as e:
-        logger.error(f"Error in API status endpoint: {e}")
-        return jsonify({
-            'error': 'Unable to retrieve server status',
-            'status': 'error'
-        }), 500
+    # Collect system information
+    downloads_count = len(DownloadManager._downloads)
+    active_downloads = sum(1 for d in DownloadManager._downloads.values() 
+                          if d['status'] in ('queued', 'downloading'))
+    completed_downloads = sum(1 for d in DownloadManager._downloads.values() 
+                             if d['status'] == 'completed')
+    
+    return jsonify({
+        'status': 'ok',
+        'version': '1.0.0',
+        'downloads': {
+            'total': downloads_count,
+            'active': active_downloads,
+            'completed': completed_downloads
+        },
+        'storage': {
+            'free_mb': round(free_space_mb),
+            'total_mb': round(total_space_mb),
+            'used_percent': round(used_percent)
+        },
+        'configuration': {
+            'max_concurrent_downloads': Config.MAX_CONCURRENT_DOWNLOADS,
+            'max_video_size_mb': Config.MAX_VIDEO_SIZE_MB,
+            'max_download_duration_seconds': Config.MAX_DOWNLOAD_DURATION_SECONDS
+        },
+        'server_time': int(time.time())
+    })
+
+
+# Cache control for static files
+@app.after_request
+def add_cache_headers(response):
+    # Only add cache headers to successful responses
+    if response.status_code == 200:
+        # Check if the request is for a static file
+        if request.path.startswith('/') and not request.path.startswith('/api/'):
+            if any(request.path.endswith(ext) for ext in ['.css', '.js']):
+                # Cache for 1 week
+                response.headers['Cache-Control'] = 'public, max-age=604800'
+            elif any(request.path.endswith(ext) for ext in ['.jpg', '.png', '.svg', '.ico']):
+                # Cache for 2 weeks
+                response.headers['Cache-Control'] = 'public, max-age=1209600'
+            elif request.path.endswith(('.woff2', '.woff', '.ttf')):
+                # Cache fonts for 1 month
+                response.headers['Cache-Control'] = 'public, max-age=2592000'
+    return response
+
 
 # Error handlers
 @app.errorhandler(404)
@@ -583,6 +991,7 @@ def not_found_error(error):
         'status': 'error'
     }), 404
 
+
 @app.errorhandler(500)
 def internal_error(error):
     """Handle internal server errors"""
@@ -592,8 +1001,37 @@ def internal_error(error):
         'status': 'error'
     }), 500
 
+
+# Start periodic cleanup thread
+def start_cleanup_thread():
+    """
+    Start a background thread for periodic download cleanup
+    """
+    def run_cleanup():
+        while True:
+            try:
+                # Clean up old downloads and files
+                DownloadManager.cleanup_old_downloads(max_age_hours=24)
+                cleanup_old_files(Config.DOWNLOAD_DIR, max_age_hours=24)
+                
+                # Check disk space and perform aggressive cleanup if needed
+                check_disk_space()
+                
+                # Sleep for 1 hour
+                time.sleep(60 * 60)
+            except Exception as e:
+                logger.error(f"Cleanup thread error: {e}")
+                # Sleep for a shorter period if an error occurs
+                time.sleep(10 * 60)
+    
+    cleanup_thread = threading.Thread(target=run_cleanup, daemon=True)
+    cleanup_thread.start()
+    logger.info("Cleanup thread started")
+
+
 # Initialize cleanup thread when the application starts
 start_cleanup_thread()
+
 
 if __name__ == '__main__':
     # Configure logging
