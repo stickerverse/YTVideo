@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const faqItems = document.querySelectorAll('.faq-item');
     
     // API endpoint
-    const API_URL = '/api';
+    const API_URL = window.location.origin + '/api';
     
     // Store active downloads
     let activeDownloads = {};
