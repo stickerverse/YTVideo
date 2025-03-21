@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /download-file/
+Disallow: /downloads/
+
+# API endpoints
+Disallow: /api/download
+Disallow: /api/download-status
+Disallow: /api/cancel-download
+Disallow: /api/batch-download
+
+# Allow all bots to scan static assets
+Allow: /styles.css
+Allow: /script.js
+Allow: /favicon.svg
+Allow: /logo.svg
+Allow: /og-image.jpg
+
+# Sitemap
+Sitemap: https://4kvideoreaper.com/sitemap.xml
