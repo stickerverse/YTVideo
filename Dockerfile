@@ -8,17 +8,20 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     aria2 \
     curl \
+    gcc \
+    python3-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install dependencies
+# Copy requirements first for better caching
 COPY requirements.txt ./
 COPY web/requirements.txt ./web/
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir -r web/requirements.txt \
-    && pip install gunicorn flask-talisman
+# Upgrade pip and install Python dependencies
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r web/requirements.txt && \
+    pip install --no-cache-dir gunicorn flask-talisman
 
 # Copy the application code
 COPY . .
