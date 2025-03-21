@@ -25,8 +25,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const formatGrid = document.getElementById('format-grid');
     
     // API endpoint (will be set up with Firebase Functions)
-    const API_URL = '/api';
-
+    const API_URL = 'https://4kvideoreaper-api.onrender.com/api';
+    
     // Store the current download ID
     let currentDownloadId = null;
     let downloadCheckInterval = null;
