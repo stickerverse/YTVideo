@@ -3,49 +3,37 @@ FROM python:3.9-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies including aria2 and ffmpeg
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    aria2 \
     ffmpeg \
-    gcc \
-    python3-dev \
-    curl \
+    aria2 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements files first for better caching
-COPY requirements.txt /app/
-COPY web/requirements.txt /app/web/
+# Copy requirements and install dependencies
+COPY requirements.txt ./
+COPY web/requirements.txt ./web/
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir -r web/requirements.txt
+    && pip install --no-cache-dir -r web/requirements.txt \
+    && pip install gunicorn
 
 # Copy the rest of the application
-COPY . /app/
-
-# Install the package in development mode
-RUN pip install -e .
+COPY . .
 
 # Create necessary directories
-RUN mkdir -p /var/data/downloads /app/config /app/logs
+RUN mkdir -p /tmp/downloads /tmp/logs
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
+ENV PYTHONPATH=/app \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DOWNLOAD_DIR=/var/data/downloads \
-    LOG_DIR=/app/logs \
-    CONFIG_DIR=/app/config \
-    PORT=10000 \
-    PYTHONPATH=/app
+    DOWNLOAD_DIR=/tmp/downloads \
+    LOG_DIR=/tmp/logs
 
-# Create a non-root user and set proper permissions
-RUN useradd -m appuser \
-    && chown -R appuser:appuser /app /var/data/downloads /app/logs
-USER appuser
-
-# Expose port (Render will use the $PORT environment variable)
+# Expose port
 EXPOSE 10000
 
-# Command to run the application
-CMD gunicorn --workers=2 --bind=0.0.0.0:$PORT --log-level=info --timeout=120 web.wsgi:app
+# Default command
+CMD ["gunicorn", "--workers=2", "--bind=0.0.0.0:$PORT", "--log-level=info", "--timeout=120", "web.wsgi:app"]
