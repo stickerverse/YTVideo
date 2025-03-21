@@ -37,28 +37,59 @@ pip install -r web/requirements.txt
 pip install -e .
 
 # Install additional packages specifically needed for video processing
-pip install --no-cache-dir yt-dlp requests flask flask-cors psutil
+pip install --no-cache-dir yt-dlp requests flask flask-cors psutil flask-talisman
 
-# Print debug info
-echo "Current directory: $(pwd)"
-echo "Python modules:"
-python -c "import sys; print('Python path:'); print('\n'.join(sys.path))"
-echo "Testing imports..."
-python -c "
-import os
-import sys
-sys.path.insert(0, os.path.abspath('.'))
-try:
-  import youtube_downloader
-  print('Successfully imported youtube_downloader')
-except ImportError as e:
-  print('Failed to import youtube_downloader:', str(e))
-"
+# Remove mock code from JavaScript files
+echo "Removing mock code from frontend files..."
+sed -i '/\/\/ For demo purposes only/,/}/d' web/public/script.js
+sed -i '/\/\/ For demo purposes only/,/}/d' web/public/app.js
+sed -i '/getMockVideoInfo/,/}/d' web/public/script.js
+sed -i '/getMockVideoInfo/,/}/d' web/public/app.js
+sed -i '/startMockDownload/,/}/d' web/public/script.js
+sed -i '/startMockDownload/,/}/d' web/public/app.js
+sed -i '/startMockBatchDownload/,/}/d' web/public/script.js
+sed -i '/startMockBatchDownload/,/}/d' web/public/app.js
+sed -i '/mockDownloads/d' web/public/script.js
+sed -i '/mockDownloads/d' web/public/app.js
+sed -i '/showApiUnavailableMessage/,/}/d' web/public/script.js
+sed -i '/showApiUnavailableMessage/,/}/d' web/public/app.js
+sed -i '/checkApiStatus/,/}/d' web/public/script.js
+sed -i '/checkApiStatus/,/}/d' web/public/app.js
 
-# Check for necessary executables
-echo "Checking for required executables..."
-which ffmpeg && echo "ffmpeg found" || echo "ffmpeg NOT found"
-which aria2c && echo "aria2c found" || echo "aria2c NOT found"
+# Optimize frontend assets
+echo "Optimizing frontend assets..."
+mkdir -p web/public/build
+
+# Minify CSS (basic minification)
+cat web/public/styles.css | \
+  sed 's/\/\*.*\*\///g' | \
+  sed 's/^\s*//g' | \
+  sed 's/\s*$//g' | \
+  sed 's/\s*{\s*/\{/g' | \
+  sed 's/\s*}\s*/\}/g' | \
+  sed 's/\s*:\s*/:/g' | \
+  sed 's/\s*;\s*/;/g' | \
+  sed 's/,\s*/,/g' | \
+  tr -d '\n' > web/public/styles.min.css
+
+# Copy JS (basic minification not included to avoid breaking code)
+cp web/public/script.js web/public/script.min.js
+
+# Update index.html to use minified files
+TIMESTAMP=$(date +%s)
+sed -e "s/styles\.css/styles.min.css?v=${TIMESTAMP}/g" \
+    -e "s/script\.js/script.min.js?v=${TIMESTAMP}/g" \
+    web/public/index.html > web/public/index.html.new
+mv web/public/index.html.new web/public/index.html
+
+# Set up auto-cleanup for /tmp/downloads
+echo "Setting up cleanup job..."
+cat > /tmp/cleanup.sh << 'EOF'
+#!/bin/bash
+find /tmp/downloads -type f -mtime +1 -delete
+EOF
+chmod +x /tmp/cleanup.sh
+(crontab -l 2>/dev/null; echo "0 * * * * /tmp/cleanup.sh") | crontab -
 
 # Print versions for debugging
 echo "Python version: $(python --version)"
@@ -72,11 +103,6 @@ if command -v ffmpeg > /dev/null; then
 else
   echo "FFmpeg not installed"
 fi
-
-# Copy the production API code to the right location
-echo "Setting up production API..."
-cp -f web/api.py web/api.py.bak || true
-echo "API backup created"
 
 # Test the API import
 echo "Testing API import..."
