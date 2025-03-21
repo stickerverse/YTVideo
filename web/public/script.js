@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
     const faqItems = document.querySelectorAll('.faq-item');
     
-    // API endpoint (replace with your actual API endpoint)
+    // API endpoint
     const API_URL = '/api';
     
     // Store active downloads
@@ -61,118 +61,144 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Download button click event
-    downloadBtn.addEventListener('click', function() {
-        const videoUrl = videoUrlInput.value.trim();
-        
-        if (!videoUrl) {
-            showNotification('Please enter a YouTube URL', 'error');
-            return;
-        }
-        
-        if (!isValidYoutubeUrl(videoUrl)) {
-            showNotification('Please enter a valid YouTube URL', 'error');
-            return;
-        }
-        
-        // Update button state
-        downloadBtn.textContent = 'Processing...';
-        downloadBtn.disabled = true;
-        
-        // Get options
-        const useAria2 = useAria2Checkbox.checked;
-        const useProxy = useProxyCheckbox.checked;
-        const downloadSubtitles = downloadSubtitlesCheckbox.checked;
-        
-        // Fetch video info from API
-        fetchVideoInfo(videoUrl, useProxy)
-            .then(data => {
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                
-                // Update UI with video info
-                updateVideoInfo(data);
-                
-                // Show download options section
-                downloadOptionsSection.classList.remove('hidden');
-                
-                // Reset download button
-                downloadBtn.textContent = 'Download';
-                downloadBtn.disabled = false;
-                
-                // Scroll to download options
-                downloadOptionsSection.scrollIntoView({ behavior: 'smooth' });
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showNotification('Error: ' + error.message, 'error');
-                
-                // Reset download button
-                downloadBtn.textContent = 'Download';
-                downloadBtn.disabled = false;
-            });
-    });
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', function() {
+            const videoUrl = videoUrlInput.value.trim();
+            
+            if (!videoUrl) {
+                showNotification('Please enter a YouTube URL', 'error');
+                return;
+            }
+            
+            if (!isValidYoutubeUrl(videoUrl)) {
+                showNotification('Please enter a valid YouTube URL', 'error');
+                return;
+            }
+            
+            // Update button state
+            downloadBtn.textContent = 'Processing...';
+            downloadBtn.disabled = true;
+            
+            // Get options
+            const useAria2 = useAria2Checkbox ? useAria2Checkbox.checked : true;
+            const useProxy = useProxyCheckbox ? useProxyCheckbox.checked : false;
+            const downloadSubtitles = downloadSubtitlesCheckbox ? downloadSubtitlesCheckbox.checked : false;
+            
+            // Fetch video info from API
+            fetchVideoInfo(videoUrl, useProxy)
+                .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    
+                    // Update UI with video info
+                    updateVideoInfo(data.data || data);
+                    
+                    // Show download options section
+                    downloadOptionsSection.classList.remove('hidden');
+                    
+                    // Reset download button
+                    downloadBtn.textContent = 'Download';
+                    downloadBtn.disabled = false;
+                    
+                    // Scroll to download options
+                    downloadOptionsSection.scrollIntoView({ behavior: 'smooth' });
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showNotification('Error: ' + error.message, 'error');
+                    
+                    // Reset download button
+                    downloadBtn.textContent = 'Download';
+                    downloadBtn.disabled = false;
+                });
+        });
+    }
     
     // Cancel download
-    cancelBtn.addEventListener('click', function() {
-        if (!currentDownloadId) return;
-        
-        cancelDownload(currentDownloadId)
-            .then(() => {
-                showNotification('Download cancelled', 'warning');
-                resetDownloadProgress();
-            })
-            .catch(error => {
-                console.error('Error cancelling download:', error);
-                showNotification('Error cancelling download', 'error');
-            });
-    });
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+            if (!currentDownloadId) return;
+            
+            cancelDownload(currentDownloadId)
+                .then(() => {
+                    showNotification('Download cancelled', 'warning');
+                    resetDownloadProgress();
+                })
+                .catch(error => {
+                    console.error('Error cancelling download:', error);
+                    showNotification('Error cancelling download', 'error');
+                });
+        });
+    }
     
     // Batch download
-    batchBtn.addEventListener('click', function() {
-        const urls = batchUrlsInput.value.trim().split('\n').filter(url => url.trim() !== '');
-        
-        if (urls.length === 0) {
-            showNotification('Please enter at least one URL', 'error');
-            return;
-        }
-        
-        // Validate URLs
-        const invalidUrls = urls.filter(url => !isValidYoutubeUrl(url.trim()));
-        if (invalidUrls.length > 0) {
-            showNotification(`Found ${invalidUrls.length} invalid YouTube URLs`, 'error');
-            return;
-        }
-        
-        // Get options
-        const format = document.getElementById('batch-format').value;
-        const maxConcurrent = parseInt(document.getElementById('batch-concurrent').value);
-        const useAria2 = useAria2Checkbox.checked;
-        const useProxy = useProxyCheckbox.checked;
-        const downloadSubtitles = downloadSubtitlesCheckbox.checked;
-        
-        // Start batch download
-        startBatchDownload(urls, format, maxConcurrent, useAria2, useProxy, downloadSubtitles)
+    if (batchBtn && batchUrlsInput) {
+        batchBtn.addEventListener('click', function() {
+            const urls = batchUrlsInput.value.trim().split('\n').filter(url => url.trim() !== '');
+            
+            if (urls.length === 0) {
+                showNotification('Please enter at least one URL', 'error');
+                return;
+            }
+            
+            // Validate URLs
+            const invalidUrls = urls.filter(url => !isValidYoutubeUrl(url.trim()));
+            if (invalidUrls.length > 0) {
+                showNotification(`Found ${invalidUrls.length} invalid YouTube URLs`, 'error');
+                return;
+            }
+            
+            // Get options
+            const format = document.getElementById('batch-format') ? document.getElementById('batch-format').value : 'best';
+            const maxConcurrent = parseInt(document.getElementById('batch-concurrent') ? document.getElementById('batch-concurrent').value : '3');
+            const useAria2 = useAria2Checkbox ? useAria2Checkbox.checked : true;
+            const useProxy = useProxyCheckbox ? useProxyCheckbox.checked : false;
+            const downloadSubtitles = downloadSubtitlesCheckbox ? downloadSubtitlesCheckbox.checked : false;
+            
+            // Start batch download
+            fetch(`${API_URL}/batch-download`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    urls,
+                    format,
+                    maxConcurrent,
+                    useAria2,
+                    useProxy,
+                    downloadSubtitles
+                }),
+            })
             .then(response => {
-                if (response.error) {
-                    throw new Error(response.error);
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Failed to start batch download');
+                    });
                 }
-                
+                return response.json();
+            })
+            .then(response => {
                 showNotification(`Started batch download of ${urls.length} videos`, 'success');
                 
                 // Clear input
                 batchUrlsInput.value = '';
                 
                 // Create batch download items in UI
-                response.downloadIds.forEach((id, index) => {
-                    createBatchDownloadItem(id, urls[index]);
-                });
+                if (batchDownloads) {
+                    const downloadIds = response.downloadIds || [];
+                    downloadIds.forEach((id, index) => {
+                        createBatchDownloadItem(id, urls[index]);
+                    });
+                }
             })
             .catch(error => {
-                console.error('Error:', error);
+                console.error('Batch download error:', error);
                 showNotification('Error: ' + error.message, 'error');
             });
-    });
+        });
+    }
     
     // Check if YouTube URL is valid
     function isValidYoutubeUrl(url) {
@@ -193,12 +219,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return await response.json();
         } catch (error) {
             console.error('Fetch error:', error);
-            
-            // For demo purposes only - remove in production
-            if (!API_URL || API_URL === '/api') {
-                return getMockVideoInfo(url);
-            }
-            
             throw error;
         }
     }
@@ -206,73 +226,77 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update UI with video information
     function updateVideoInfo(videoData) {
         // Update video details
-        videoThumbnail.src = videoData.thumbnail;
-        videoTitle.textContent = videoData.title;
-        videoChannel.textContent = `Channel: ${videoData.channel}`;
+        if (videoThumbnail) videoThumbnail.src = videoData.thumbnail;
+        if (videoTitle) videoTitle.textContent = videoData.title || 'Unknown Title';
+        if (videoChannel) videoChannel.textContent = `Channel: ${videoData.uploader || videoData.channel || 'Unknown Channel'}`;
         
-        if (videoData.duration) {
+        if (videoDuration && videoData.duration) {
             videoDuration.textContent = formatDuration(videoData.duration);
-        } else {
+        } else if (videoDuration) {
             videoDuration.textContent = '';
         }
         
-        if (videoData.views) {
-            videoViews.textContent = `Views: ${formatNumber(videoData.views)}`;
-        } else {
+        if (videoViews && videoData.view_count) {
+            videoViews.textContent = `Views: ${formatNumber(videoData.view_count)}`;
+        } else if (videoViews) {
             videoViews.textContent = '';
         }
         
         // Clear existing formats
-        formatGrid.innerHTML = '';
-        
-        // Add format options
-        if (videoData.formats && videoData.formats.length > 0) {
-            videoData.formats.forEach(format => {
-                const formatOption = document.createElement('div');
-                formatOption.className = 'format-option';
-                formatOption.dataset.formatId = format.id || format.format_id;
-                
-                formatOption.innerHTML = `
-                    <div class="format-name">${format.name || format.quality || format.format}</div>
-                    <div class="format-info">
-                        <span>${format.resolution || format.quality || ''}</span>
-                        <span>${format.size ? formatSize(format.size) : ''}</span>
-                    </div>
-                `;
-                
-                formatOption.addEventListener('click', function() {
-                    // Remove selected class from all formats
-                    document.querySelectorAll('.format-option').forEach(opt => {
-                        opt.classList.remove('selected');
+        if (formatGrid) {
+            formatGrid.innerHTML = '';
+            
+            // Add format options
+            if (videoData.formats && videoData.formats.length > 0) {
+                videoData.formats.forEach(format => {
+                    const formatOption = document.createElement('div');
+                    formatOption.className = 'format-option';
+                    formatOption.dataset.formatId = format.format_id || format.id;
+                    
+                    formatOption.innerHTML = `
+                        <div class="format-name">${format.name || format.quality || format.format_id || format.resolution}</div>
+                        <div class="format-info">
+                            <span>${format.resolution || format.quality || ''}</span>
+                            <span>${format.filesize ? formatSize(format.filesize) : ''}</span>
+                        </div>
+                    `;
+                    
+                    formatOption.addEventListener('click', function() {
+                        // Remove selected class from all formats
+                        document.querySelectorAll('.format-option').forEach(opt => {
+                            opt.classList.remove('selected');
+                        });
+                        
+                        // Add selected class to clicked format
+                        formatOption.classList.add('selected');
+                        
+                        // Show progress section
+                        if (downloadProgress) {
+                            downloadProgress.classList.remove('hidden');
+                        }
+                        
+                        // Reset progress
+                        resetDownloadProgress();
+                        
+                        // Start download
+                        const formatId = formatOption.dataset.formatId;
+                        const videoUrl = videoUrlInput.value.trim();
+                        const useAria2 = useAria2Checkbox ? useAria2Checkbox.checked : true;
+                        const useProxy = useProxyCheckbox ? useProxyCheckbox.checked : false;
+                        const downloadSubtitles = downloadSubtitlesCheckbox ? downloadSubtitlesCheckbox.checked : false;
+                        
+                        startDownload(videoUrl, formatId, useAria2, useProxy, downloadSubtitles);
                     });
                     
-                    // Add selected class to clicked format
-                    formatOption.classList.add('selected');
-                    
-                    // Show progress section
-                    downloadProgress.classList.remove('hidden');
-                    
-                    // Reset progress
-                    resetDownloadProgress();
-                    
-                    // Start download
-                    const formatId = formatOption.dataset.formatId;
-                    const videoUrl = videoUrlInput.value.trim();
-                    const useAria2 = useAria2Checkbox.checked;
-                    const useProxy = useProxyCheckbox.checked;
-                    const downloadSubtitles = downloadSubtitlesCheckbox.checked;
-                    
-                    startDownload(videoUrl, formatId, useAria2, useProxy, downloadSubtitles);
+                    formatGrid.appendChild(formatOption);
                 });
-                
-                formatGrid.appendChild(formatOption);
-            });
-        } else {
-            // No formats available
-            const noFormats = document.createElement('div');
-            noFormats.className = 'no-formats';
-            noFormats.textContent = 'No download formats available for this video.';
-            formatGrid.appendChild(noFormats);
+            } else {
+                // No formats available
+                const noFormats = document.createElement('div');
+                noFormats.className = 'no-formats';
+                noFormats.textContent = 'No download formats available for this video.';
+                formatGrid.appendChild(noFormats);
+            }
         }
     }
     
@@ -307,48 +331,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return data;
         } catch (error) {
             console.error('Download error:', error);
-            
-            // For demo purposes only - remove in production
-            if (!API_URL || API_URL === '/api') {
-                return startMockDownload(url, formatId);
-            }
-            
-            throw error;
-        }
-    }
-    
-    // Start batch download
-    async function startBatchDownload(urls, format, maxConcurrent, useAria2 = true, useProxy = false, downloadSubtitles = false) {
-        try {
-            const response = await fetch(`${API_URL}/batch-download`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    urls,
-                    format,
-                    maxConcurrent,
-                    useAria2,
-                    useProxy,
-                    downloadSubtitles
-                }),
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to start batch download');
-            }
-            
-            return await response.json();
-        } catch (error) {
-            console.error('Batch download error:', error);
-            
-            // For demo purposes only - remove in production
-            if (!API_URL || API_URL === '/api') {
-                return startMockBatchDownload(urls, format, maxConcurrent);
-            }
-            
             throw error;
         }
     }
@@ -374,17 +356,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return await response.json();
         } catch (error) {
             console.error('Cancel download error:', error);
-            
-            // For demo purposes only - remove in production
-            if (!API_URL || API_URL === '/api') {
-                // Stop mock polling
-                if (activeDownloads[downloadId] && activeDownloads[downloadId].interval) {
-                    clearInterval(activeDownloads[downloadId].interval);
-                    delete activeDownloads[downloadId];
-                }
-                return { success: true };
-            }
-            
             throw error;
         }
     }
@@ -410,28 +381,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 
                 // Update progress
-                updateDownloadProgress(data);
+                updateDownloadProgress(data.data || data);
                 
                 // Handle completed download
-                if (data.status === 'completed') {
+                if (data.data?.status === 'completed' || data.status === 'completed') {
                     clearInterval(pollInterval);
-                    handleDownloadComplete(data);
+                    handleDownloadComplete(data.data || data);
                 }
                 
                 // Handle failed download
-                if (data.status === 'failed') {
+                if (data.data?.status === 'failed' || data.status === 'failed') {
                     clearInterval(pollInterval);
-                    handleDownloadFailed(data);
+                    handleDownloadFailed(data.data || data);
                 }
                 
                 // Handle cancelled download
-                if (data.status === 'cancelled') {
+                if (data.data?.status === 'cancelled' || data.status === 'cancelled') {
                     clearInterval(pollInterval);
                     resetDownloadProgress();
                 }
                 
                 // Update batch download item if exists
-                updateBatchDownloadItem(downloadId, data);
+                updateBatchDownloadItem(downloadId, data.data || data);
                 
             } catch (error) {
                 console.error('Error polling download status:', error);
@@ -445,39 +416,41 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update download progress UI
     function updateDownloadProgress(data) {
         const progress = data.progress || 0;
-        progressFill.style.width = `${progress}%`;
-        progressPercentage.textContent = `${Math.round(progress)}%`;
+        if (progressFill) progressFill.style.width = `${progress}%`;
+        if (progressPercentage) progressPercentage.textContent = `${Math.round(progress)}%`;
         
         // Update status text
-        if (data.status === 'queued') {
-            progressText.textContent = 'Queued...';
-        } else if (data.status === 'downloading') {
-            progressText.textContent = 'Downloading...';
-        } else if (data.status === 'completed') {
-            progressText.textContent = 'Download complete!';
-        } else if (data.status === 'failed') {
-            progressText.textContent = `Download failed: ${data.error || 'Unknown error'}`;
-        } else if (data.status === 'cancelled') {
-            progressText.textContent = 'Download cancelled';
+        if (progressText) {
+            if (data.status === 'queued') {
+                progressText.textContent = 'Queued...';
+            } else if (data.status === 'downloading') {
+                progressText.textContent = 'Downloading...';
+            } else if (data.status === 'completed') {
+                progressText.textContent = 'Download complete!';
+            } else if (data.status === 'failed') {
+                progressText.textContent = `Download failed: ${data.error || 'Unknown error'}`;
+            } else if (data.status === 'cancelled') {
+                progressText.textContent = 'Download cancelled';
+            }
         }
         
         // Update speed and ETA
-        if (data.speed) {
+        if (downloadSpeed && data.speed) {
             downloadSpeed.textContent = `${formatSize(data.speed)}/s`;
         }
         
-        if (data.eta) {
+        if (downloadEta && data.eta) {
             downloadEta.textContent = formatTime(data.eta);
         }
     }
     
     // Reset download progress UI
     function resetDownloadProgress() {
-        progressFill.style.width = '0%';
-        progressPercentage.textContent = '0%';
-        progressText.textContent = 'Preparing download...';
-        downloadSpeed.textContent = '0 MB/s';
-        downloadEta.textContent = '--:--';
+        if (progressFill) progressFill.style.width = '0%';
+        if (progressPercentage) progressPercentage.textContent = '0%';
+        if (progressText) progressText.textContent = 'Preparing download...';
+        if (downloadSpeed) downloadSpeed.textContent = '0 MB/s';
+        if (downloadEta) downloadEta.textContent = '--:--';
         currentDownloadId = null;
     }
     
@@ -485,14 +458,15 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleDownloadComplete(data) {
         showNotification('Download complete!', 'success');
         
-        // If file URL is provided, trigger download
-        if (data.fileUrl) {
-            const link = document.createElement('a');
-            link.href = data.fileUrl;
-            link.download = '';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+        // If download ID and file path are available, create download link
+        if (data.id && data.file_path) {
+            // Create a download link
+            const downloadLink = document.createElement('a');
+            downloadLink.href = `/api/download-file/${data.id}`;
+            downloadLink.download = '';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
         }
     }
     
@@ -503,6 +477,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Create batch download item in UI
     function createBatchDownloadItem(downloadId, url) {
+        if (!batchDownloads) return;
+        
         const item = document.createElement('div');
         item.className = 'batch-item';
         item.dataset.downloadId = downloadId;
@@ -560,10 +536,10 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (data.status === 'completed') {
                 status.textContent = 'Completed';
                 
-                // Add download link if available
-                if (data.fileUrl && !item.querySelector('.batch-item-download')) {
+                // Add download link if not already there
+                if (!item.querySelector('.batch-item-download')) {
                     const downloadLink = document.createElement('a');
-                    downloadLink.href = data.fileUrl;
+                    downloadLink.href = `/api/download-file/${downloadId}`;
                     downloadLink.className = 'batch-item-download';
                     downloadLink.innerHTML = '<i class="fas fa-download"></i>';
                     item.appendChild(downloadLink);
@@ -675,170 +651,4 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, 5000);
     }
-    
-    // Mock functions for demo/development
-    function getMockVideoInfo(url) {
-        // Extract video ID for demo
-        let videoId;
-        try {
-            videoId = url.includes('youtu.be/') 
-                ? url.split('youtu.be/')[1].split('?')[0]
-                : new URL(url).searchParams.get('v');
-        } catch (e) {
-            videoId = 'dQw4w9WgXcQ'; // Default for demo
-        }
-        
-        return {
-            id: videoId,
-            title: 'Demo Video Title',
-            channel: 'Demo Channel',
-            duration: 245, // 4:05 minutes
-            views: 1234567,
-            thumbnail: 'https://i.ytimg.com/vi/' + videoId + '/maxresdefault.jpg',
-            formats: [
-                {
-                    format_id: 'best',
-                    name: 'Best Quality (Video + Audio)',
-                    resolution: 'Best Available',
-                    ext: 'mp4'
-                },
-                {
-                    format_id: '2160p',
-                    name: '4K MP4',
-                    resolution: '3840x2160',
-                    ext: 'mp4'
-                },
-                {
-                    format_id: '1080p',
-                    name: '1080p MP4',
-                    resolution: '1920x1080',
-                    ext: 'mp4'
-                },
-                {
-                    format_id: '720p',
-                    name: '720p MP4',
-                    resolution: '1280x720',
-                    ext: 'mp4'
-                },
-                {
-                    format_id: '480p',
-                    name: '480p MP4',
-                    resolution: '854x480',
-                    ext: 'mp4'
-                },
-                {
-                    format_id: 'bestaudio',
-                    name: 'MP3 (Audio Only)',
-                    resolution: 'Audio only',
-                    ext: 'mp3'
-                }
-            ]
-        };
-    }
-    
-    function startMockDownload(url, formatId) {
-        // Generate a mock download ID
-        const downloadId = 'mock-' + Math.random().toString(36).substring(7);
-        currentDownloadId = downloadId;
-        
-        // Store mock download data
-        activeDownloads[downloadId] = {
-            progress: 0,
-            speed: 0,
-            eta: 100,
-            status: 'downloading',
-            title: 'Demo Video',
-            url: url,
-            formatId: formatId
-        };
-        
-        // Set up mock progress updates
-        let progress = 0;
-        activeDownloads[downloadId].interval = setInterval(() => {
-            progress += Math.random() * 5;
-            if (progress >= 100) {
-                progress = 100;
-                clearInterval(activeDownloads[downloadId].interval);
-                
-                // Complete the download
-                activeDownloads[downloadId].progress = progress;
-                activeDownloads[downloadId].status = 'completed';
-                activeDownloads[downloadId].fileUrl = '#demo-download';
-                
-                // Update UI
-                updateDownloadProgress({
-                    progress: progress,
-                    status: 'completed',
-                    fileUrl: '#demo-download'
-                });
-                
-                // Show notification
-                showNotification('Demo download completed!', 'success');
-            } else {
-                // Update progress
-                activeDownloads[downloadId].progress = progress;
-                activeDownloads[downloadId].speed = Math.random() * 5 * 1024 * 1024; // Random speed up to 5 MB/s
-                activeDownloads[downloadId].eta = Math.floor((100 - progress) / 5); // Estimate time remaining
-                
-                // Update UI
-                updateDownloadProgress({
-                    progress: progress,
-                    status: 'downloading',
-                    speed: activeDownloads[downloadId].speed,
-                    eta: activeDownloads[downloadId].eta
-                });
-            }
-        }, 1000);
-        
-        return {
-            downloadId: downloadId,
-            success: true
-        };
-    }
-    
-    function startMockBatchDownload(urls, format, maxConcurrent) {
-        // Generate mock download IDs
-        const downloadIds = urls.map(() => 'mock-batch-' + Math.random().toString(36).substring(7));
-        
-        // Create mock batch download response
-        return {
-            downloadIds: downloadIds,
-            success: true,
-            message: `Started ${urls.length} downloads (DEMO MODE)`
-        };
-    }
-    
-    // Check API status on startup
-    async function checkApiStatus() {
-        try {
-            const response = await fetch(`${API_URL}/status`);
-            
-            if (!response.ok) {
-                showApiUnavailableMessage();
-            }
-        } catch (error) {
-            console.error('API status check error:', error);
-            showApiUnavailableMessage();
-        }
-    }
-    
-    function showApiUnavailableMessage() {
-        // Create message container
-        const apiMessage = document.createElement('div');
-        apiMessage.className = 'api-unavailable';
-        apiMessage.innerHTML = `
-            <div class="api-unavailable-content">
-                <i class="fas fa-exclamation-triangle"></i>
-                <h3>API Service Unavailable</h3>
-                <p>The download service is currently offline or not properly configured.</p>
-                <p>This is a demo frontend only. The app will work in demo mode with simulated downloads.</p>
-            </div>
-        `;
-        
-        // Add to page
-        document.querySelector('.container').insertBefore(apiMessage, document.querySelector('.hero'));
-    }
-    
-    // Run API check on startup
-    checkApiStatus();
 });
