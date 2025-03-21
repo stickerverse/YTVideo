@@ -8,29 +8,12 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     aria2 \
     curl \
-    gcc \
-    python3-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt ./
-COPY web/requirements.txt ./web/
-
-# Upgrade pip and install Python dependencies
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir -r web/requirements.txt && \
-    pip install --no-cache-dir gunicorn flask-talisman
-
-# Copy the application code
-COPY . .
-
 # Create necessary directories
-RUN mkdir -p /tmp/downloads /tmp/logs
-
-# Set permissions for tmp directories
-RUN chmod 777 /tmp/downloads /tmp/logs
+RUN mkdir -p /tmp/downloads /tmp/logs && \
+    chmod 777 /tmp/downloads /tmp/logs
 
 # Set environment variables
 ENV PYTHONPATH=/app \
@@ -40,15 +23,24 @@ ENV PYTHONPATH=/app \
     LOG_DIR=/tmp/logs \
     ENVIRONMENT=production
 
+# Copy application files
+COPY . .
+
+# Install base Python requirements
+RUN pip install --upgrade pip && \
+    pip install gunicorn==20.1.0 flask==2.2.3 flask-cors==3.0.10 yt-dlp==2023.7.6 requests==2.28.2
+
 # Run module creation script
 RUN python create_init_files.py
 
 # Expose port (Render will use the $PORT environment variable)
 EXPOSE ${PORT:-10000}
 
-# Set up healthcheck
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:${PORT:-10000}/api/status || exit 1
 
-# Command to run the application
-CMD gunicorn --workers=1 --bind=0.0.0.0:${PORT:-10000} --log-level=info --timeout=120 web.wsgi:app
+# Command to run the application with additional debug output
+CMD python -c "import sys; print('Python version:', sys.version); print('Python path:', sys.path); print('Current directory:', __import__('os').getcwd())" && \
+    ls -la /app && ls -la /app/web && \
+    gunicorn --workers=1 --log-level=debug --bind=0.0.0.0:${PORT:-10000} --timeout=120 web.wsgi:app
