@@ -1,0 +1,89 @@
+# Multi-stage build for optimized production container
+# Stage 1: Build dependencies
+FROM python:3.9-slim AS builder
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    PYTHONPATH=/app
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements files
+COPY requirements.txt /app/
+COPY web/requirements.txt /app/web/
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir -r web/requirements.txt \
+    && pip install --no-cache-dir gunicorn
+
+# Stage 2: Runtime image
+FROM python:3.9-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DOWNLOAD_DIR=/var/data/downloads \
+    LOG_DIR=/app/logs \
+    PYTHONPATH=/app \
+    PORT=10000 \
+    ENVIRONMENT=production
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    aria2 \
+    ffmpeg \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python dependencies from builder stage
+COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Create necessary directories with proper permissions
+RUN mkdir -p /var/data/downloads /app/logs \
+    && chmod 777 /var/data/downloads /app/logs
+
+# Copy application code
+COPY . /app/
+
+# Run the module creation script
+RUN python create_init_files.py
+
+# Install the package in development mode
+RUN pip install -e .
+
+# Create a non-root user
+RUN useradd -m appuser && \
+    chown -R appuser:appuser /app /var/data/downloads /app/logs
+USER appuser
+
+# Copy entry point script and make it executable
+COPY docker-entrypoint.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:${PORT:-10000}/api/status || exit 1
+
+# Expose port
+EXPOSE ${PORT:-10000}
+
+# Set entrypoint
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
+# Default command
+CMD ["gunicorn", "--workers=4", "--threads=2", "--bind=0.0.0.0:${PORT:-10000}", "--log-level=info", "--timeout=120", "--worker-tmp-dir=/dev/shm", "web.wsgi:app"]
