@@ -79,6 +79,11 @@ download_files = {}
 video_info_cache = {}
 VIDEO_INFO_CACHE_TTL = 3600  # 1 hour
 
+# Cookie browser configuration - automatically use the browser's cookies
+COOKIE_BROWSER = os.environ.get('COOKIE_BROWSER', 'firefox')  # Default to Firefox
+COOKIE_BROWSER_PROFILE = os.environ.get('COOKIE_BROWSER_PROFILE', None)
+COOKIE_FILE = os.environ.get('COOKIE_FILE', None)
+
 # Middleware to log request timing
 @app.before_request
 def start_timer():
@@ -269,7 +274,7 @@ def video_info():
         
         # Function to get video info
         def get_info():
-            # yt-dlp options
+            # yt-dlp options with cookie handling
             ydl_opts = {
                 'quiet': True,
                 'no_warnings': True,
@@ -277,6 +282,14 @@ def video_info():
                 'nocheckcertificate': True,
                 'ignoreerrors': False,
             }
+            
+            # Add cookie handling - prefer file over browser
+            if COOKIE_FILE and os.path.exists(COOKIE_FILE):
+                ydl_opts['cookiefile'] = COOKIE_FILE
+                logger.info(f"Using cookie file: {COOKIE_FILE}")
+            elif COOKIE_BROWSER:
+                ydl_opts['cookiesfrombrowser'] = (COOKIE_BROWSER, COOKIE_BROWSER_PROFILE, None, None)
+                logger.info(f"Using cookies from browser: {COOKIE_BROWSER}")
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 return ydl.extract_info(url, download=False)
@@ -598,7 +611,7 @@ def do_download(download_id, url, format_id, download_subtitles):
                     if download_id in active_downloads:
                         active_downloads[download_id]['progress'] = 100.0
         
-        # Optimize yt-dlp options
+        # Optimize yt-dlp options, including cookie support
         ydl_opts = {
             'format': format_id,
             'outtmpl': f"{output_path}.%(ext)s",
@@ -609,6 +622,14 @@ def do_download(download_id, url, format_id, download_subtitles):
             # Performance options
             'concurrent_fragment_downloads': 5,  # Download fragments in parallel
         }
+        
+        # Add cookie handling - prefer file over browser
+        if COOKIE_FILE and os.path.exists(COOKIE_FILE):
+            ydl_opts['cookiefile'] = COOKIE_FILE
+            logger.info(f"Using cookie file for download: {COOKIE_FILE}")
+        elif COOKIE_BROWSER:
+            ydl_opts['cookiesfrombrowser'] = (COOKIE_BROWSER, COOKIE_BROWSER_PROFILE, None, None)
+            logger.info(f"Using cookies from browser for download: {COOKIE_BROWSER}")
         
         # Use aria2c if available
         if shutil.which('aria2c'):
