@@ -557,4 +557,288 @@ document.addEventListener('DOMContentLoaded', function() {
                 status.textContent = 'Queued';
             } else if (data.status === 'downloading') {
                 status.textContent = `${Math.round(data.progress || 0)}%`;
-            } else if (data.status === 'completed')
+            } else if (data.status === 'completed') {
+                status.textContent = 'Completed';
+                
+                // Add download link if available
+                if (data.fileUrl && !item.querySelector('.batch-item-download')) {
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = data.fileUrl;
+                    downloadLink.className = 'batch-item-download';
+                    downloadLink.innerHTML = '<i class="fas fa-download"></i>';
+                    item.appendChild(downloadLink);
+                }
+            } else if (data.status === 'failed') {
+                status.textContent = 'Failed';
+            } else if (data.status === 'cancelled') {
+                status.textContent = 'Cancelled';
+            }
+        }
+    }
+    
+    // Format utilities
+    function formatDuration(seconds) {
+        if (!seconds) return '0:00';
+        
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.floor(seconds % 60);
+        
+        if (minutes < 60) {
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+        
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+        
+        return `${hours}:${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+    
+    function formatSize(bytes) {
+        if (bytes === 0) return '0 B';
+        
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        
+        return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    function formatTime(seconds) {
+        if (!seconds) return '--:--';
+        
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.floor(seconds % 60);
+        
+        if (minutes < 60) {
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+        
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+        
+        return `${hours}:${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+    
+    function formatNumber(num) {
+        if (!num) return '0';
+        
+        return new Intl.NumberFormat().format(num);
+    }
+    
+    // Notification system
+    function showNotification(message, type = 'info') {
+        // Check if notifications container exists
+        let container = document.querySelector('.notifications-container');
+        
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'notifications-container';
+            document.body.appendChild(container);
+        }
+        
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        
+        // Add icon based on type
+        let icon = 'info-circle';
+        if (type === 'success') icon = 'check-circle';
+        if (type === 'warning') icon = 'exclamation-triangle';
+        if (type === 'error') icon = 'times-circle';
+        
+        notification.innerHTML = `
+            <i class="fas fa-${icon}"></i>
+            <span>${message}</span>
+            <button class="notification-close"><i class="fas fa-times"></i></button>
+        `;
+        
+        // Add to container
+        container.appendChild(notification);
+        
+        // Add close button event
+        const closeBtn = notification.querySelector('.notification-close');
+        closeBtn.addEventListener('click', () => {
+            notification.classList.add('notification-hide');
+            setTimeout(() => {
+                notification.remove();
+            }, 300);
+        });
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.classList.add('notification-hide');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.remove();
+                    }
+                }, 300);
+            }
+        }, 5000);
+    }
+    
+    // Mock functions for demo/development
+    function getMockVideoInfo(url) {
+        // Extract video ID for demo
+        let videoId;
+        try {
+            videoId = url.includes('youtu.be/') 
+                ? url.split('youtu.be/')[1].split('?')[0]
+                : new URL(url).searchParams.get('v');
+        } catch (e) {
+            videoId = 'dQw4w9WgXcQ'; // Default for demo
+        }
+        
+        return {
+            id: videoId,
+            title: 'Demo Video Title',
+            channel: 'Demo Channel',
+            duration: 245, // 4:05 minutes
+            views: 1234567,
+            thumbnail: 'https://i.ytimg.com/vi/' + videoId + '/maxresdefault.jpg',
+            formats: [
+                {
+                    format_id: 'best',
+                    name: 'Best Quality (Video + Audio)',
+                    resolution: 'Best Available',
+                    ext: 'mp4'
+                },
+                {
+                    format_id: '2160p',
+                    name: '4K MP4',
+                    resolution: '3840x2160',
+                    ext: 'mp4'
+                },
+                {
+                    format_id: '1080p',
+                    name: '1080p MP4',
+                    resolution: '1920x1080',
+                    ext: 'mp4'
+                },
+                {
+                    format_id: '720p',
+                    name: '720p MP4',
+                    resolution: '1280x720',
+                    ext: 'mp4'
+                },
+                {
+                    format_id: '480p',
+                    name: '480p MP4',
+                    resolution: '854x480',
+                    ext: 'mp4'
+                },
+                {
+                    format_id: 'bestaudio',
+                    name: 'MP3 (Audio Only)',
+                    resolution: 'Audio only',
+                    ext: 'mp3'
+                }
+            ]
+        };
+    }
+    
+    function startMockDownload(url, formatId) {
+        // Generate a mock download ID
+        const downloadId = 'mock-' + Math.random().toString(36).substring(7);
+        currentDownloadId = downloadId;
+        
+        // Store mock download data
+        activeDownloads[downloadId] = {
+            progress: 0,
+            speed: 0,
+            eta: 100,
+            status: 'downloading',
+            title: 'Demo Video',
+            url: url,
+            formatId: formatId
+        };
+        
+        // Set up mock progress updates
+        let progress = 0;
+        activeDownloads[downloadId].interval = setInterval(() => {
+            progress += Math.random() * 5;
+            if (progress >= 100) {
+                progress = 100;
+                clearInterval(activeDownloads[downloadId].interval);
+                
+                // Complete the download
+                activeDownloads[downloadId].progress = progress;
+                activeDownloads[downloadId].status = 'completed';
+                activeDownloads[downloadId].fileUrl = '#demo-download';
+                
+                // Update UI
+                updateDownloadProgress({
+                    progress: progress,
+                    status: 'completed',
+                    fileUrl: '#demo-download'
+                });
+                
+                // Show notification
+                showNotification('Demo download completed!', 'success');
+            } else {
+                // Update progress
+                activeDownloads[downloadId].progress = progress;
+                activeDownloads[downloadId].speed = Math.random() * 5 * 1024 * 1024; // Random speed up to 5 MB/s
+                activeDownloads[downloadId].eta = Math.floor((100 - progress) / 5); // Estimate time remaining
+                
+                // Update UI
+                updateDownloadProgress({
+                    progress: progress,
+                    status: 'downloading',
+                    speed: activeDownloads[downloadId].speed,
+                    eta: activeDownloads[downloadId].eta
+                });
+            }
+        }, 1000);
+        
+        return {
+            downloadId: downloadId,
+            success: true
+        };
+    }
+    
+    function startMockBatchDownload(urls, format, maxConcurrent) {
+        // Generate mock download IDs
+        const downloadIds = urls.map(() => 'mock-batch-' + Math.random().toString(36).substring(7));
+        
+        // Create mock batch download response
+        return {
+            downloadIds: downloadIds,
+            success: true,
+            message: `Started ${urls.length} downloads (DEMO MODE)`
+        };
+    }
+    
+    // Check API status on startup
+    async function checkApiStatus() {
+        try {
+            const response = await fetch(`${API_URL}/status`);
+            
+            if (!response.ok) {
+                showApiUnavailableMessage();
+            }
+        } catch (error) {
+            console.error('API status check error:', error);
+            showApiUnavailableMessage();
+        }
+    }
+    
+    function showApiUnavailableMessage() {
+        // Create message container
+        const apiMessage = document.createElement('div');
+        apiMessage.className = 'api-unavailable';
+        apiMessage.innerHTML = `
+            <div class="api-unavailable-content">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>API Service Unavailable</h3>
+                <p>The download service is currently offline or not properly configured.</p>
+                <p>This is a demo frontend only. The app will work in demo mode with simulated downloads.</p>
+            </div>
+        `;
+        
+        // Add to page
+        document.querySelector('.container').insertBefore(apiMessage, document.querySelector('.hero'));
+    }
+    
+    // Run API check on startup
+    checkApiStatus();
+});
