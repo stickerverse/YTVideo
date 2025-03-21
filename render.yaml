@@ -3,11 +3,11 @@ services:
   - type: web
     name: 4kvideoreaper-api
     env: docker
-    region: ohio
+    region: ohio  # Choose your preferred region
     plan: free
     healthCheckPath: /api/status
     buildCommand: bash render-build.sh
-    startCommand: gunicorn --log-level=debug --workers=1 --timeout=120 --bind=0.0.0.0:$PORT web.wsgi:app
+    startCommand: gunicorn --workers=1 --timeout=120 --bind=0.0.0.0:$PORT web.wsgi:app
     envVars:
       - key: DOWNLOAD_DIR
         value: /tmp/downloads
@@ -19,3 +19,13 @@ services:
         value: /app
       - key: ENVIRONMENT
         value: production
+      - key: MAX_CONCURRENT_DOWNLOADS
+        value: "3"
+      - key: MAX_VIDEO_SIZE_MB
+        value: "1024"
+      - key: RATE_LIMIT_REQUESTS
+        value: "10"
+      - key: RATE_LIMIT_PERIOD
+        value: "60"
+      - key: SECRET_KEY
+        generateValue: true
