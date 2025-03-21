@@ -17,3 +17,6 @@ psutil>=5.9.5
 # Monitoring and Logging
 sentry-sdk[flask]>=1.28.1
 python-json-logger>=2.0.7
+
+# Remove uwsgi which requires compilation
+# uwsgi>=2.0.22
