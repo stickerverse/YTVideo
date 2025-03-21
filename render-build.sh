@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Enhanced build script for Render with better debugging
+# Build script with fixed versions for Render
 
 set -o errexit
 
@@ -37,15 +37,43 @@ echo "PYTHONPATH: $PYTHONPATH"
 echo "Initial directory structure:"
 find . -type d -not -path "*/\.*" | sort
 
-# Install Python dependencies with explicit versioning
+# Install Python dependencies with pinned versions for compatibility
 echo "Installing dependencies..."
 pip install --upgrade pip
-pip install --no-cache-dir gunicorn==20.1.0 flask==2.2.3 flask-cors==3.0.10 yt-dlp==2023.7.6 requests==2.28.2 flask-talisman==0.8.0 python-dotenv==1.0.0 psutil==5.9.5
 
-# Now install from requirements.txt, but skip problematic packages
-echo "Installing from requirements.txt..."
-grep -v "uwsgi" requirements.txt > requirements_clean.txt
-pip install --no-cache-dir -r requirements_clean.txt || echo "Some packages might have failed to install"
+# First install Werkzeug with the correct version
+echo "Installing Werkzeug 2.2.3 (compatible with Flask 2.2.3)..."
+pip install Werkzeug==2.2.3
+
+# Then install other dependencies with pinned versions
+echo "Installing other dependencies with compatible versions..."
+pip install --no-cache-dir \
+    Flask==2.2.3 \
+    gunicorn==20.1.0 \
+    flask-cors==3.0.10 \
+    yt-dlp==2023.7.6 \
+    requests==2.28.2 \
+    flask-talisman==0.8.0 \
+    python-dotenv==1.0.0 \
+    psutil==5.9.5 \
+    python-json-logger==2.0.7 \
+    Flask-Limiter==3.3.1
+
+# Create a requirements.txt file with these pinned versions
+echo "Creating pinned-requirements.txt..."
+cat > pinned-requirements.txt << EOF
+Werkzeug==2.2.3
+Flask==2.2.3
+gunicorn==20.1.0
+flask-cors==3.0.10
+yt-dlp==2023.7.6
+requests==2.28.2
+flask-talisman==0.8.0
+python-dotenv==1.0.0
+psutil==5.9.5
+python-json-logger==2.0.7
+Flask-Limiter==3.3.1
+EOF
 
 # Create Python package structure
 echo "Creating Python package structure..."
@@ -65,93 +93,9 @@ ls -la web/
 ls -la web/api.py || echo "WARNING: web/api.py is missing!"
 ls -la web/wsgi.py || echo "WARNING: web/wsgi.py is missing!"
 
-# Verify Python imports
-echo "Testing imports..."
-python -c "
-import sys
-print('Python path:', sys.path)
-try:
-    import web
-    print('Successfully imported web module')
-    try:
-        from web import api
-        print('Successfully imported web.api module')
-        if hasattr(api, 'app'):
-            print('Flask app found in web.api module')
-        else:
-            print('WARNING: No Flask app in web.api module')
-    except ImportError as e:
-        print('Failed to import web.api module:', e)
-except ImportError as e:
-    print('Failed to import web module:', e)
-"
-
-# If wsgi.py or api.py is missing, provide default versions
-if [ ! -f "web/api.py" ]; then
-    echo "Creating minimal web/api.py as it's missing"
-    cat > web/api.py << 'EOF'
-"""
-Minimal API implementation for 4K Video Reaper
-"""
-import os
-import flask
-from flask import Flask, jsonify
-from flask_cors import CORS
-
-app = Flask(__name__)
-CORS(app)
-
-@app.route('/api/status', methods=['GET'])
-def api_status_endpoint():
-    """
-    Provide API service status information
-    """
-    return jsonify({
-        'status': 'ok',
-        'version': '1.0.0',
-        'message': 'Minimal API is running'
-    })
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
-EOF
-fi
-
-if [ ! -f "web/wsgi.py" ]; then
-    echo "Creating web/wsgi.py as it's missing"
-    cat > web/wsgi.py << 'EOF'
-"""
-WSGI entry point for running the 4K Video Reaper web application
-"""
-import os
-import sys
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger('wsgi')
-
-# Add parent directory to Python path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.insert(0, parent_dir)
-sys.path.insert(0, current_dir)
-
-logger.info(f"Python path: {sys.path}")
-
-try:
-    from web.api import app
-    logger.info("Successfully imported app")
-except Exception as e:
-    logger.error(f"Failed to import app: {str(e)}")
-    import traceback
-    logger.error(traceback.format_exc())
-    raise
-
-if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port)
-EOF
-fi
+# Check installed package versions
+echo "Installed Python packages:"
+pip freeze | grep -E 'Flask|Werkzeug|gunicorn|flask-cors|yt-dlp'
 
 # Final test to ensure the application can be imported
 echo "Final import test..."
@@ -159,6 +103,11 @@ python -c "
 import os, sys
 sys.path.insert(0, os.getcwd())
 try:
+    import werkzeug
+    print(f'Werkzeug version: {werkzeug.__version__}')
+    import flask
+    print(f'Flask version: {flask.__version__}')
+    print('Attempting to import web.wsgi...')
     from web.wsgi import app
     print('SUCCESS: WSGI application successfully imported')
 except Exception as e:
