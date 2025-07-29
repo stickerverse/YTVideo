@@ -9,7 +9,7 @@ to ensure the service can start and respond to health checks.
 import os
 import json
 import logging
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory, render_template_string
 from flask_cors import CORS
 
 # Configure logging
@@ -19,8 +19,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Create Flask app
-app = Flask(__name__)
+# Create Flask app with static folder configuration
+app = Flask(__name__, static_folder='public', static_url_path='')
 CORS(app)
 
 # Basic configuration
@@ -33,6 +33,11 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 @app.route('/')
 def home():
+    """Serve the main HTML interface"""
+    return send_from_directory('public', 'index.html')
+
+@app.route('/app')
+def app_redirect():
     """Home page redirect to status"""
     return jsonify({
         'message': 'Welcome to 4K Video Reaper API',
