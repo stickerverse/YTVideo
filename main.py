@@ -7,8 +7,11 @@ import sys
 import os
 import argparse
 
-from .ui.cli import CliInterface
-from .config import config
+# Add the current directory to Python path for imports
+sys.path.insert(0, os.path.dirname(__file__))
+
+from youtube_downloader.ui.cli import CliInterface
+from config import config
 
 
 def main() -> int:
@@ -21,7 +24,7 @@ def main() -> int:
     # Check if running in GUI mode
     if len(sys.argv) > 1 and sys.argv[1] == '--gui':
         try:
-            from .ui.gui import GuiInterface
+            from youtube_downloader.ui.gui import GuiInterface
             gui = GuiInterface()
             return gui.run()
         except ImportError:
